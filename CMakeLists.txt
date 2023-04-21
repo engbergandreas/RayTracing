@@ -7,9 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Add the external library as a subdirectory
 add_subdirectory(ext/glm)
-
 # Set the include directory
-include_directories(include)
+include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # Add source files to the project
 file(GLOB SOURCES "src/*.cpp")
