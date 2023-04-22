@@ -1,8 +1,7 @@
 #include "Triangle.h"
 
-
 Triangle::Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color) : 
-	_v1{ v1 }, _v2{ v2 }, _v3{ v3 }, _color{ color } 
+	Intersectable{ color }, _v1 { v1 }, _v2{v2}, _v3{v3}
 {
 	glm::dvec3 e1{ _v2 - _v1 };
 	glm::dvec3 e2{ _v3 - _v1 };
@@ -11,12 +10,15 @@ Triangle::Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const&
 
 double Triangle::rayIntersection(Ray const& ray) const
 {
-	const double NOT_FOUND = -1.0;
-
 	glm::dvec3 T{ ray.startPoint - _v1 };
 	glm::dvec3 E1{ _v2 - _v1 };
 	glm::dvec3 E2{ _v3 - _v1 };
 	glm::dvec3 D{ ray.endPoint - ray.startPoint };
+
+	//Ray points in the same direction as normal, i.e., can't hit the triangle.
+	double dprod{ glm::dot(glm::normalize(D), _normal) };
+	if (dprod > 0)  //or -EPS;
+		return NOT_FOUND;
 
 	glm::dvec3 P{ glm::cross(D, E2) };
 
@@ -64,4 +66,11 @@ bool Triangle::confirmNormalDirection(glm::dvec3 const& d)
 	return (std::abs(_normal.x - d.x) < EPS) &&
 		(std::abs(_normal.y - d.y) < EPS) &&
 		(std::abs(_normal.z - d.z) < EPS);
+}
+
+void Triangle::transformTriangle(glm::dmat4x4 const& M)
+{
+	_v1 = M * glm::dvec4(_v1, 1.0);
+	_v2 = M * glm::dvec4(_v2, 1.0);
+	_v3 = M * glm::dvec4(_v3, 1.0);
 }

@@ -2,20 +2,21 @@
 #define SCENE_H_
 
 #include <vector>
-#include "Triangle.h"
 #include "Ray.h"
-
-//Forward decl
-class Triangle;
+#include "Intersectable.h"
+#include "Triangle.h"
+#include "Tetrahedron.h"
+#include "Sphere.h"
 
 class Scene
 {
 public:
 	Scene();
+	~Scene();
 
 	void shootRayIntoScene(Ray& ray) const;
 
 private:
-	std::vector<Triangle> triangles;
+	std::vector<Intersectable*> objects;
 };
 #endif // !SCENE_H_
