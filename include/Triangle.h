@@ -12,15 +12,17 @@ public:
 	Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color);
 	
 	double rayIntersection(Ray const& ray) const override;
+	glm::dvec3 getNormal(glm::dvec3 const&) const override;
 
-	glm::dvec3 const& normal() const;
+	//glm::dvec3 const& normal() const;
 	glm::dvec3 const& color() const;
 
 	bool confirmNormalDirection(glm::dvec3 const& direction);
 	void transformTriangle(glm::dmat4x4 const& M);
 private:
-
 	glm::dvec3 _v1, _v2, _v3;
 	glm::dvec3 _normal;
+
+	void computeNormal();
 };
 #endif // __TRIANGLE_H__

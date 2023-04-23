@@ -13,7 +13,7 @@ class Intersectable {
 public:
 	virtual ~Intersectable() = default;
 	virtual double rayIntersection(Ray const& ray) const = 0;
-
+	virtual glm::dvec3 getNormal(glm::dvec3 const& intersection) const = 0;
 	glm::dvec3 const& color() const { return _color; };
 
 protected: 

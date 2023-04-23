@@ -36,15 +36,47 @@ void Camera::render(Scene const& scene)
 }
 
 
-void Camera::writeToFile(std::string const& filename) const {
+void Camera::writeToFile(std::string const& filename) {
 	EasyBMP::Image image(CAMERA_PLANE_WIDTH, CAMERA_PLANE_HEIGHT, filename, EasyBMP::RGBColor(255, 105, 180));
+	
+	constexpr double minD{ std::numeric_limits<double>::min() };
+	//double maxR{ minD }, maxB{ minD }, maxG{ minD };
+	double maxValue{ minD };
+
+	std::vector<std::vector<glm::dvec3>> scaledColor(CAMERA_PLANE_HEIGHT);
+	for (size_t row{ 0 }; row < CAMERA_PLANE_HEIGHT; ++row) {
+		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
+			glm::dvec3 color{ cameraplane[row][column].color };
+
+			color.r = std::sqrt(color.r);
+			color.g = std::sqrt(color.g);
+			color.b = std::sqrt(color.b);
+
+			cameraplane[row][column].color = color;
+
+			//maxR = std::max(color.r, maxR);
+			//maxG = std::max(color.g, maxG);
+			//maxB = std::max(color.b, maxB);
+			
+			double max = std::max(std::max(color.r, color.g), color.b);
+			maxValue = std::max(max, maxValue);
+			
+		}
+	}
 
 	//Write to file, important to fetch in reverse row order to write bottom to up  
 	//as we have defined the camera plane, otherwise image would be upside-down.
 	for (size_t row{ 0 }; row < CAMERA_PLANE_HEIGHT; ++row) {
 		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
-
 			glm::dvec3 color = cameraplane[row][column].color;
+
+			//color.r /= maxR;
+			//color.g /= maxG;
+			//color.b /= maxB;
+			color.r /= maxValue;
+			color.g /= maxValue;
+			color.b /= maxValue;
+
 			image.SetPixel((CAMERA_PLANE_HEIGHT - 1) - row, (CAMERA_PLANE_WIDTH - 1) - column, EasyBMP::RGBColor(
 				color.r * 255,
 				color.g * 255,

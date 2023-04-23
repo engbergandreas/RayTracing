@@ -20,7 +20,7 @@ class Camera {
 public:
 	Camera(bool useeye1 = true);
 	void render(Scene const& scene);
-	void writeToFile(std::string const& filename) const;
+	void writeToFile(std::string const& filename);
 
 private:
 	struct Pixel {

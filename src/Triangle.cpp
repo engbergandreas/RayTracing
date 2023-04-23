@@ -3,9 +3,7 @@
 Triangle::Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color) : 
 	Intersectable{ color }, _v1 { v1 }, _v2{v2}, _v3{v3}
 {
-	glm::dvec3 e1{ _v2 - _v1 };
-	glm::dvec3 e2{ _v3 - _v1 };
-	_normal = glm::normalize(glm::cross(e1, e2));
+	computeNormal();
 }
 
 double Triangle::rayIntersection(Ray const& ray) const
@@ -17,7 +15,7 @@ double Triangle::rayIntersection(Ray const& ray) const
 
 	//Ray points in the same direction as normal, i.e., can't hit the triangle.
 	double dprod{ glm::dot(glm::normalize(D), _normal) };
-	if (dprod > 0)  //or -EPS;
+	if (dprod > 0.0)  //or -EPS;
 		return NOT_FOUND;
 
 	glm::dvec3 P{ glm::cross(D, E2) };
@@ -50,8 +48,7 @@ double Triangle::rayIntersection(Ray const& ray) const
 	return NOT_FOUND; //intersection behind ray origin
 }
 
-
-glm::dvec3 const& Triangle::normal() const
+glm::dvec3 Triangle::getNormal(glm::dvec3 const& ) const
 {
 	return _normal;
 }
@@ -73,4 +70,13 @@ void Triangle::transformTriangle(glm::dmat4x4 const& M)
 	_v1 = M * glm::dvec4(_v1, 1.0);
 	_v2 = M * glm::dvec4(_v2, 1.0);
 	_v3 = M * glm::dvec4(_v3, 1.0);
+
+	computeNormal();
+}
+
+void Triangle::computeNormal()
+{
+	glm::dvec3 e1{ _v2 - _v1 };
+	glm::dvec3 e2{ _v3 - _v1 };
+	_normal = glm::normalize(glm::cross(e1, e2));
 }

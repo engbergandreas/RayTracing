@@ -17,10 +17,10 @@ Scene::Scene() {
 	Triangle* bottomWallRightLeft{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, -6.0, 5.0}, {13.0, 0.0, 5.0 }, { 0.0, 1.0, 1.0 } } }; //yewllo
 	Triangle* bottomWallRightRight{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, -6.0, -5.0}, {10.0, -6.0, 5.0 }, { 0.0, 1.0, 1.0 } } }; //yewllo
 	//Ceiling
-	Triangle* cLeft{ new Triangle{ {-3.0, 0.0, 5.0}, {0.0, 6.0, 5.0}, {0.0, -6.0, 5.0}, {0.5, 1.0, 1.0} } };
-	Triangle* cMLeft{ new Triangle{ {0.0, -6.0, 5.0}, {0.0, 6.0, 5.0}, {10.0, 6.0, 5.0}, {0.5, 1.0, 1.0} } };
-	Triangle* cMright{ new Triangle{ {0.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {10.0, -6.0, 5.0}, {0.5, 1.0, 1.0} } };
-	Triangle* cRight{ new Triangle{ {13.0, 0.0, 5.0}, {10.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {0.5, 1.0, 1.0} } };
+	Triangle* cLeft{ new Triangle{ {-3.0, 0.0, 5.0}, {0.0, 6.0, 5.0}, {0.0, -6.0, 5.0}, {1.0, 1.0, 1.0} } };
+	Triangle* cMLeft{ new Triangle{ {0.0, -6.0, 5.0}, {0.0, 6.0, 5.0}, {10.0, 6.0, 5.0}, {1.0, 1.0, 1.0} } };
+	Triangle* cMright{ new Triangle{ {0.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {10.0, -6.0, 5.0}, {1.0, 1.0, 1.0} } };
+	Triangle* cRight{ new Triangle{ {13.0, 0.0, 5.0}, {10.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {1.0, 1.0, 1.0} } };
 	//Floor
 	Triangle* fLeft{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, -6.0, -5.0}, {0.0, 6.0, -5.0}, {1.0, 1.0, 1.0} } };
 	Triangle* fMLeft{ new Triangle{ {0.0, -6.0, -5.0}, {10.0, 6.0, -5.0}, {0.0, 6.0, -5.0}, {1.0, 1.0, 1.0} } };
@@ -66,9 +66,11 @@ Scene::Scene() {
 	//Add other objects to the scene
 	Tetrahedron tetra{ glm::dvec3{0.52, 0.32, 0.87} };
 	glm::dmat4 S{ glm::scale(glm::dmat4{ 1.0 }, glm::dvec3{ 2.0, 2.0, 2.0 }) };
-	glm::dmat4 R{ glm::rotate(glm::dmat4{1.0}, glm::radians(180.0), glm::dvec3{1.0, 0.0, 1.0})};
-	glm::dmat4 T{ glm::translate(glm::dmat4{1.0}, glm::dvec3{3.0, 3.0, 0.0}) };
+	glm::dmat4 R{ glm::rotate(glm::dmat4{1.0}, glm::radians(-35.0), glm::dvec3{0.0, 0.0, 1.0}) };
+	glm::dmat4 R2{ glm::rotate(glm::dmat4{1.0}, glm::radians(30.0), glm::dvec3{0.0, 1.0, 0.0})};
+	glm::dmat4 T{ glm::translate(glm::dmat4{1.0}, glm::dvec3{4.0, 3.0, -1.0}) };
 	tetra.transformObject(S);
+	tetra.transformObject(R2);
 	tetra.transformObject(R);
 	tetra.transformObject(T);
 
@@ -76,8 +78,12 @@ Scene::Scene() {
 		objects.push_back(new Triangle{ std::move(triangle) });
 	}
 	
-	Sphere* sphere{ new Sphere{glm::dvec3{5.0, -3.0, -1.0}, glm::dvec3{0.7, 0.2, 0.4}, 1.0} };
+	Sphere* sphere{ new Sphere{glm::dvec3{5.0, -2.0, -2.0}, glm::dvec3{0.7, 0.2, 0.4}, 1.4} };
 	objects.push_back(sphere);
+
+	//Add light sources
+	Lightsource sphericalLight{ glm::dvec3{5.0, 0.0, 5.0}, {1.0, 1.0, 1.0}, 0.5 };
+	lightSources.push_back(sphericalLight);
 }
 
 Scene::~Scene() {
@@ -87,8 +93,8 @@ Scene::~Scene() {
 }
 void Scene::shootRayIntoScene(Ray& ray) const
 {
+	//Store closest object hit in ray 
 	double closest_t{ std::numeric_limits<double>::max() };
-
 	for (Intersectable const*  obj : objects) {
 		double t = obj->rayIntersection(ray);
 		if (t > 0 && t < closest_t) {
@@ -97,9 +103,41 @@ void Scene::shootRayIntoScene(Ray& ray) const
 		}
 	}
 
-	if (ray.hitinfo) {
-		ray.rayColor = ray.hitinfo->color();
+	if (!ray.hitinfo)
+		return;
+
+	Lightsource light{ lightSources.back() };
+	glm::dvec3 intersectionPoint{ ray.startPoint + closest_t * glm::normalize(ray.endPoint - ray.startPoint) };
+	glm::dvec3 endPoint{ light.position };
+
+	Ray shadowRay{ intersectionPoint, endPoint, {0.0, 0.0, 0.0} };
+
+	//Check if shadow ray is intersecting another object before reaching light source
+	for (Intersectable const*  obj : objects) {
+		double t = obj->rayIntersection(shadowRay);
+		if (t > 0.0 && t < (1.0 - EPS)) {
+			ray.rayColor = { 0.0, 0.0, 0.0 };
+			return;
+		}
 	}
+
+	double r{ glm::length(shadowRay.rayDirection(false)) };
+
+	double cosTheta{ glm::dot(shadowRay.rayDirection(), ray.hitinfo->getNormal(intersectionPoint)) };
+	cosTheta = std::max(cosTheta, 0.0);
+
+	double Sigma{ light.cross_section / (r * r) };
+	glm::dvec3 irradiance{ Sigma * cosTheta * light.L0 };
+	
+	glm::dvec3 rho{ 1.0, 1.0, 1.0 };
+
+ 	glm::dvec3 emittedLight{ rho * irradiance / 3.14159 };
+
+	ray.rayColor = ray.hitinfo->color() * emittedLight;
+
+	
+	//ray.rayColor = ray.hitinfo->color();
+	
 }
 
 
