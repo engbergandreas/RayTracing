@@ -7,11 +7,15 @@ Camera::Camera(bool useEye1) : cameraplane{ CAMERA_PLANE_HEIGHT }
 		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
 			double y{ row * DELTA_HEIGHT - (1.0 - DELTA_HEIGHT / 2.0) };
 			double z{ column * DELTA_HEIGHT - (1.0 - DELTA_WIDTH / 2.0) };
+
+			glm::dvec3 rayStartPoint{ useEye1 ? eyePos1 : eyePos2 };
 			glm::dvec3 rayEndpoint{ 0.0, y, z };
+			glm::dvec3 rayDir{ rayEndpoint - rayStartPoint };
+			glm::dvec3 importance{ glm::dvec3{1.0, 1.0, 1.0} };
 
 			std::vector<Ray> rays;
 
-			Ray ray{ useEye1 ? eyePos1 : eyePos2, rayEndpoint, glm::dvec3{0.0, 0.0, 0.0} };
+			Ray ray{ rayStartPoint, rayDir, importance };
 			rays.push_back(ray);
 
 			cameraplane[row].push_back(Pixel{ rays });
@@ -27,9 +31,13 @@ void Camera::render(Scene const& scene)
 			Pixel& pixel{ cameraplane[row][column] };
 			for (Ray& ray : pixel.rays) {
 				//Shoot the ray and build up a raytree
-				scene.shootRayIntoScene(ray);
+				//scene.shootRayIntoScene(ray);
+				int maxDepth{ 3 };
+				RayTree rayTree{ scene, ray, maxDepth };
+				rayTree.createRayTree();
+
 				//Traverse raytree in backwards order to compute the color 
-				pixel.color += ray.rayColor;
+				pixel.color += rayTree.computeRadiance();
 			}
 		}
 	}

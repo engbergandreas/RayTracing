@@ -17,6 +17,9 @@ public:
 
 	void shootRayIntoScene(Ray& ray) const;
 
+	std::vector<Lightsource> const& getLightSources() const;
+	std::vector<Intersectable*> const& getObjects() const;
+
 private:
 	std::vector<Intersectable*> objects;
 	std::vector<Lightsource> lightSources;

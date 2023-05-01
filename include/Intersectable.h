@@ -3,6 +3,7 @@
 
 #include "Ray.h"
 #include <glm/glm.hpp>
+#include "BRDF.h"
 
 class Ray;
 
@@ -15,10 +16,11 @@ public:
 	virtual double rayIntersection(Ray const& ray) const = 0;
 	virtual glm::dvec3 getNormal(glm::dvec3 const& intersection) const = 0;
 	glm::dvec3 const& color() const { return _color; };
+	BRDF const& brdf() const { return _brdf; };
 
 protected: 
-	Intersectable(glm::dvec3 const& color) : _color{ color } {}
+	Intersectable(glm::dvec3 const& color, BRDF const& brdf) : _color{ color }, _brdf{ brdf } {}
 	glm::dvec3 _color;
-	//Possibly add get normal function aswell.
+	BRDF _brdf;
 };
 #endif // !INTERSECTABLE_H_

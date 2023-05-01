@@ -1,31 +1,37 @@
 #include "Scene.h"
 
 Scene::Scene() {
+	glm::dvec3 rho{ 0.8, 0.8, 0.8 };
+	glm::dvec3 perfectReflectionRho{ 1.0 };
+	double glassIor{ 1.5 };
+	BRDF diffuseBrdf{ Material::lambertian, rho, 1.0 };
+	BRDF specularBrdf{ Material::specular, perfectReflectionRho, 1.0 };
+	BRDF transparentBrdf{ Material::transparent, perfectReflectionRho, glassIor };
 	//Build room of triangles are defined as looking towards them from inside them room.
 	//Top half
-	Triangle* topWallLeft{ new Triangle{ {0.0, 6.0, -5.0}, {10.0, 6.0, 5.0}, {0.0, 6.0, 5.0 }, { 1.0, 0.0, 0.0 } } }; //red 
-	Triangle* topWallRight{ new Triangle{ {0.0, 6.0, -5.0}, {10.0, 6.0, -5.0}, {10.0, 6.0, 5.0 }, { 1.0, 0.0, 0.0 } } }; //red 
-	Triangle* topWallLeftLeft{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, 6.0, 5.0}, {-3.0, 0.0, 5.0 }, { 0.0, 0.0, 1.0 } } }; //blue 
-	Triangle* topWallLeftRight{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, 6.0, -5.0}, {0.0, 6.0, 5.0 }, { 0.0, 0.0, 1.0 } } }; //blue 
-	Triangle* topWallRightLeft{ new Triangle{ {10.0, 6.0, -5.0}, {13.0, 0.0, 5.0}, {10.0, 6.0, 5.0 }, { 1.0, 1.0, 0.0 } } }; //red-green 
-	Triangle* topWallRightRight{ new Triangle{ {10.0, 6.0, -5.0}, {13.0, 0.0, -5.0}, {13.0, 0.0, 5.0 }, { 1.0, 1.0, 0.0 } } }; //red-green
+	Triangle* topWallLeft{ new Triangle{ {0.0, 6.0, -5.0}, {10.0, 6.0, 5.0}, {0.0, 6.0, 5.0 }, { 1.0, 0.0, 0.0 }, diffuseBrdf } }; //red 
+	Triangle* topWallRight{ new Triangle{ {0.0, 6.0, -5.0}, {10.0, 6.0, -5.0}, {10.0, 6.0, 5.0 }, { 1.0, 0.0, 0.0 }, diffuseBrdf } }; //red 
+	Triangle* topWallLeftLeft{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, 6.0, 5.0}, {-3.0, 0.0, 5.0 }, { 0.0, 0.0, 1.0 }, diffuseBrdf } }; //blue 
+	Triangle* topWallLeftRight{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, 6.0, -5.0}, {0.0, 6.0, 5.0 }, { 0.0, 0.0, 1.0 }, diffuseBrdf } }; //blue 
+	Triangle* topWallRightLeft{ new Triangle{ {10.0, 6.0, -5.0}, {13.0, 0.0, 5.0}, {10.0, 6.0, 5.0 }, { 1.0, 1.0, 0.0 }, diffuseBrdf } }; //red-green 
+	Triangle* topWallRightRight{ new Triangle{ {10.0, 6.0, -5.0}, {13.0, 0.0, -5.0}, {13.0, 0.0, 5.0 }, { 1.0, 1.0, 0.0 }, diffuseBrdf } }; //red-green
 	//Bottom half
-	Triangle* bottomWallLeft{ new Triangle{ {10.0, -6.0, -5.0}, {0.0, -6.0, 5.0}, {10.0, -6.0, 5.0 }, { 0.0, 1.0, 0.0 } } }; //green
-	Triangle* bottomWallRight{ new Triangle{ {10.0, -6.0, -5.0}, {0.0, -6.0, -5.0}, {0.0, -6.0, 5.0 }, { 0.0, 1.0, 0.0 } } }; //green
-	Triangle* bottomWallLeftLeft{ new Triangle{ {.0, -6.0, -5.0}, {-3.0, 0.0, 5.0}, {0.0, -6.0, 5.0 }, { 1.0, 0.0, 1.0 } } }; //purple
-	Triangle* bottomWallLeftRight{ new Triangle{ {0.0, -6.0, -5.0}, {-3.0, 0.0, -5.0}, {-3.0, 0.0, 5.0 }, { 1.0, 0.0, 1.0 } } }; //purple
-	Triangle* bottomWallRightLeft{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, -6.0, 5.0}, {13.0, 0.0, 5.0 }, { 0.0, 1.0, 1.0 } } }; //yewllo
-	Triangle* bottomWallRightRight{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, -6.0, -5.0}, {10.0, -6.0, 5.0 }, { 0.0, 1.0, 1.0 } } }; //yewllo
+	Triangle* bottomWallLeft{ new Triangle{ {10.0, -6.0, -5.0}, {0.0, -6.0, 5.0}, {10.0, -6.0, 5.0 }, { 0.0, 1.0, 0.0 }, diffuseBrdf } }; //green
+	Triangle* bottomWallRight{ new Triangle{ {10.0, -6.0, -5.0}, {0.0, -6.0, -5.0}, {0.0, -6.0, 5.0 }, { 0.0, 1.0, 0.0 }, diffuseBrdf } }; //green
+	Triangle* bottomWallLeftLeft{ new Triangle{ {.0, -6.0, -5.0}, {-3.0, 0.0, 5.0}, {0.0, -6.0, 5.0 }, { 1.0, 0.0, 1.0 }, diffuseBrdf } }; //purple
+	Triangle* bottomWallLeftRight{ new Triangle{ {0.0, -6.0, -5.0}, {-3.0, 0.0, -5.0}, {-3.0, 0.0, 5.0 }, { 1.0, 0.0, 1.0 }, diffuseBrdf } }; //purple
+	Triangle* bottomWallRightLeft{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, -6.0, 5.0}, {13.0, 0.0, 5.0 }, { 0.0, 1.0, 1.0 }, diffuseBrdf } }; //yewllo
+	Triangle* bottomWallRightRight{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, -6.0, -5.0}, {10.0, -6.0, 5.0 }, { 0.0, 1.0, 1.0 }, diffuseBrdf } }; //yewllo
 	//Ceiling
-	Triangle* cLeft{ new Triangle{ {-3.0, 0.0, 5.0}, {0.0, 6.0, 5.0}, {0.0, -6.0, 5.0}, {1.0, 1.0, 1.0} } };
-	Triangle* cMLeft{ new Triangle{ {0.0, -6.0, 5.0}, {0.0, 6.0, 5.0}, {10.0, 6.0, 5.0}, {1.0, 1.0, 1.0} } };
-	Triangle* cMright{ new Triangle{ {0.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {10.0, -6.0, 5.0}, {1.0, 1.0, 1.0} } };
-	Triangle* cRight{ new Triangle{ {13.0, 0.0, 5.0}, {10.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {1.0, 1.0, 1.0} } };
+	Triangle* cLeft{ new Triangle{ {-3.0, 0.0, 5.0}, {0.0, 6.0, 5.0}, {0.0, -6.0, 5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
+	Triangle* cMLeft{ new Triangle{ {0.0, -6.0, 5.0}, {0.0, 6.0, 5.0}, {10.0, 6.0, 5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
+	Triangle* cMright{ new Triangle{ {0.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {10.0, -6.0, 5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
+	Triangle* cRight{ new Triangle{ {13.0, 0.0, 5.0}, {10.0, -6.0, 5.0}, {10.0, 6.0, 5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
 	//Floor
-	Triangle* fLeft{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, -6.0, -5.0}, {0.0, 6.0, -5.0}, {1.0, 1.0, 1.0} } };
-	Triangle* fMLeft{ new Triangle{ {0.0, -6.0, -5.0}, {10.0, 6.0, -5.0}, {0.0, 6.0, -5.0}, {1.0, 1.0, 1.0} } };
-	Triangle* fMright{ new Triangle{ {0.0, -6.0, -5.0}, {10.0, -6.0, -5.0}, {10.0, 6.0, -5.0}, {1.0, 1.0, 1.0} } };
-	Triangle* fRight{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, 6.0, -5.0}, {10.0, -6.0, -5.0}, {1.0, 1.0, 1.0} } };
+	Triangle* fLeft{ new Triangle{ {-3.0, 0.0, -5.0}, {0.0, -6.0, -5.0}, {0.0, 6.0, -5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
+	Triangle* fMLeft{ new Triangle{ {0.0, -6.0, -5.0}, {10.0, 6.0, -5.0}, {0.0, 6.0, -5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
+	Triangle* fMright{ new Triangle{ {0.0, -6.0, -5.0}, {10.0, -6.0, -5.0}, {10.0, 6.0, -5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
+	Triangle* fRight{ new Triangle{ {13.0, 0.0, -5.0}, {10.0, 6.0, -5.0}, {10.0, -6.0, -5.0}, {1.0, 1.0, 1.0}, diffuseBrdf } };
 
 	objects.push_back(topWallLeft);
 	objects.push_back(topWallRight);
@@ -48,7 +54,7 @@ Scene::Scene() {
 	objects.push_back(fMright);
 	objects.push_back(fRight);
 
-	//assert(topWallLeft.confirmNormalDirection({ 0.0, -1.0, 0.0 }));
+	assert(topWallLeft->confirmNormalDirection({ 0.0, -1.0, 0.0 }));
 	assert(topWallRight->confirmNormalDirection({ 0.0, -1.0, 0.0 }));
 	assert(bottomWallLeft->confirmNormalDirection({ 0.0, 1.0, 0.0 }));
 	assert(bottomWallRight->confirmNormalDirection({ 0.0, 1.0, 0.0 }));
@@ -64,7 +70,7 @@ Scene::Scene() {
 	assert(fRight->confirmNormalDirection({ 0.0, 0.0, 1.0 }));
 
 	//Add other objects to the scene
-	Tetrahedron tetra{ glm::dvec3{0.52, 0.32, 0.87} };
+	Tetrahedron tetra{ glm::dvec3{0.52, 0.32, 0.87}, specularBrdf };
 	glm::dmat4 S{ glm::scale(glm::dmat4{ 1.0 }, glm::dvec3{ 2.0, 2.0, 2.0 }) };
 	glm::dmat4 R{ glm::rotate(glm::dmat4{1.0}, glm::radians(-35.0), glm::dvec3{0.0, 0.0, 1.0}) };
 	glm::dmat4 R2{ glm::rotate(glm::dmat4{1.0}, glm::radians(30.0), glm::dvec3{0.0, 1.0, 0.0})};
@@ -78,11 +84,18 @@ Scene::Scene() {
 		objects.push_back(new Triangle{ std::move(triangle) });
 	}
 	
-	Sphere* sphere{ new Sphere{glm::dvec3{5.0, -2.0, -2.0}, glm::dvec3{0.7, 0.2, 0.4}, 1.4} };
+	Sphere* sphere{ new Sphere{glm::dvec3{5.0, 0.0, -2.0}, glm::dvec3{0.7, 0.2, 0.4}, 1.0, transparentBrdf } };
 	objects.push_back(sphere);
 
+	////Optional glas wall infront of the scene
+	//Triangle* glas{ new Triangle{ {3.0, 6.0, -5.0}, {3.0, -6.0, -5.0}, {3.0, -6.0, 5.0 }, { 1.0, 0.0, 0.5 }, transparentBrdf } };
+	//objects.push_back(glas);
+	//Triangle* glas2{ new Triangle{ {3.0, 6.0, -5.0}, {3.0, -6.0, 5.0}, {3.0, 6.0, 5.0 }, { 1.0, 0.0, 0.5 }, transparentBrdf } };
+	//objects.push_back(glas2);
+
+
 	//Add light sources
-	Lightsource sphericalLight{ glm::dvec3{5.0, 0.0, 5.0}, {1.0, 1.0, 1.0}, 0.5 };
+	Lightsource sphericalLight{ glm::dvec3{5.0, 0.0, 5.0}, {1.0, 1.0, 1.0}, 0.1 };
 	lightSources.push_back(sphericalLight);
 }
 
@@ -102,43 +115,60 @@ void Scene::shootRayIntoScene(Ray& ray) const
 			ray.hitinfo = obj;
 		}
 	}
-
-	if (!ray.hitinfo)
-		return;
-
-	Lightsource light{ lightSources.back() };
-	glm::dvec3 intersectionPoint{ ray.startPoint + closest_t * glm::normalize(ray.endPoint - ray.startPoint) };
-	glm::dvec3 endPoint{ light.position };
-
-	Ray shadowRay{ intersectionPoint, endPoint, {0.0, 0.0, 0.0} };
-
-	//Check if shadow ray is intersecting another object before reaching light source
-	for (Intersectable const*  obj : objects) {
-		double t = obj->rayIntersection(shadowRay);
-		if (t > 0.0 && t < (1.0 - EPS)) {
-			ray.rayColor = { 0.0, 0.0, 0.0 };
-			return;
-		}
+	
+	//If object is of type sphere we need to normalize ray direction
+	//using pointer dynamic castin
+	if (dynamic_cast<Sphere const*>(ray.hitinfo)) {
+		ray.intersectionPoint = ray.startPoint + closest_t * ray.rayDirection();
+	}
+	else {
+		ray.intersectionPoint = ray.startPoint + closest_t * ray.rayDirection(false);
 	}
 
-	double r{ glm::length(shadowRay.rayDirection(false)) };
+	//if (!ray.hitinfo)
+	//	return;
+		
+	//Lightsource light{ lightSources.back() };
+	//glm::dvec3 intersectionPoint{ ray.startPoint + closest_t * ray.rayDirection() };
+	//glm::dvec3 sRayEndPoint{ light.position };
+	//glm::dvec3 sRayDir{ sRayEndPoint - intersectionPoint };
 
-	double cosTheta{ glm::dot(shadowRay.rayDirection(), ray.hitinfo->getNormal(intersectionPoint)) };
-	cosTheta = std::max(cosTheta, 0.0);
+	//Ray shadowRay{ intersectionPoint, sRayDir, {0.0, 0.0, 0.0} };
 
-	double Sigma{ light.cross_section / (r * r) };
-	glm::dvec3 irradiance{ Sigma * cosTheta * light.L0 };
-	
-	glm::dvec3 rho{ 1.0, 1.0, 1.0 };
+	////Check if shadow ray is intersecting another object before reaching light source
+	//for (Intersectable const*  obj : objects) {
+	//	double t = obj->rayIntersection(shadowRay);
+	//	if (t > 0.0 && t < (1.0 - EPS)) {
+	//		ray.rayColor = { 0.0, 0.0, 0.0 };
+	//		return;
+	//	}
+	//}
 
- 	glm::dvec3 emittedLight{ rho * irradiance / 3.14159 };
+	//double r{ glm::length(shadowRay.rayDirection(false)) };
 
-	ray.rayColor = ray.hitinfo->color() * emittedLight;
+	//double cosTheta{ glm::dot(shadowRay.rayDirection(), ray.hitinfo->getNormal(intersectionPoint)) };
+	//cosTheta = std::max(cosTheta, 0.0);
 
-	
-	//ray.rayColor = ray.hitinfo->color();
+	//double Sigma{ light.cross_section / (r * r) };
+	//glm::dvec3 irradiance{ Sigma * cosTheta * light.L0 };
+	//
+	//glm::dvec3 rho{ 1.0, 1.0, 1.0 };
+
+	//glm::dvec3 emittedLight{ rho * irradiance / 3.14159 };
+
+	//ray.rayColor = ray.hitinfo->color() * emittedLight;
+
+	//
+	////ray.rayColor = ray.hitinfo->color();
 	
 }
 
+std::vector<Lightsource> const& Scene::getLightSources() const
+{
+	return lightSources;
+}
 
-
+std::vector<Intersectable*> const& Scene::getObjects() const
+{
+	return objects;
+}

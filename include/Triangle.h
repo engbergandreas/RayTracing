@@ -9,7 +9,7 @@ class Ray;
 
 class Triangle : public Intersectable {
 public:
-	Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color);
+	Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color, BRDF const& brdf);
 	
 	double rayIntersection(Ray const& ray) const override;
 	glm::dvec3 getNormal(glm::dvec3 const&) const override;

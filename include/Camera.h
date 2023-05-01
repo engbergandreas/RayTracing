@@ -7,6 +7,7 @@
 #include "Ray.h"
 #include "EasyBMP.h"
 #include "Scene.h"
+#include "Raytree.h"
 
 //Forward decl
 class Scene;

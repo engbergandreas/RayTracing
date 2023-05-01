@@ -1,7 +1,7 @@
 #include "Sphere.h"
 
-Sphere::Sphere(glm::dvec3 const& center, glm::dvec3 const& color, double r) :
-	Intersectable{ color }, _center { center }, _radius{ r } {}
+Sphere::Sphere(glm::dvec3 const& center, glm::dvec3 const& color, double r, BRDF const& brdf) :
+	Intersectable{ color, brdf }, _center { center }, _radius{ r } {}
 
 double Sphere::rayIntersection(Ray const& ray) const
 {

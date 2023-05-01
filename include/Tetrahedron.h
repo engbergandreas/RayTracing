@@ -10,7 +10,7 @@ class Triangle;
 
 class Tetrahedron {
 public:
-	Tetrahedron(glm::dvec3 const& color);
+	Tetrahedron(glm::dvec3 const& color, BRDF const& brdf);
 
 	//double rayIntersection(Ray& ray, double t) const override;
 

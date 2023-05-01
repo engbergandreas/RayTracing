@@ -1,7 +1,7 @@
 #include "Triangle.h"
 
-Triangle::Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color) : 
-	Intersectable{ color }, _v1 { v1 }, _v2{v2}, _v3{v3}
+Triangle::Triangle(glm::dvec3 const& v1, glm::dvec3 const& v2, glm::dvec3 const& v3, glm::dvec3 const& color, BRDF const& brdf) : 
+	Intersectable{ color, brdf }, _v1 { v1 }, _v2{v2}, _v3{v3}
 {
 	computeNormal();
 }
@@ -11,12 +11,15 @@ double Triangle::rayIntersection(Ray const& ray) const
 	glm::dvec3 T{ ray.startPoint - _v1 };
 	glm::dvec3 E1{ _v2 - _v1 };
 	glm::dvec3 E2{ _v3 - _v1 };
-	glm::dvec3 D{ ray.endPoint - ray.startPoint };
+	glm::dvec3 D{ ray.direction };
 
 	//Ray points in the same direction as normal, i.e., can't hit the triangle.
-	double dprod{ glm::dot(glm::normalize(D), _normal) };
-	if (dprod > 0.0)  //or -EPS;
-		return NOT_FOUND;
+	// Obs, if we have internal refractions this should not be computed because the ray direction will be
+	// on the inside of an object and thus their normals can be in the same direction.
+	
+	//double dprod{ glm::dot(glm::normalize(D), _normal) };
+	//if (dprod > 0.0)  //or -EPS;
+	//	return NOT_FOUND;
 
 	glm::dvec3 P{ glm::cross(D, E2) };
 
@@ -42,8 +45,10 @@ double Triangle::rayIntersection(Ray const& ray) const
 
 	double t{ PE1_inv * glm::dot(Q, E2) };
 
-	if (t > EPS)
+	if (t > EPS) {
+		//glm::dvec3 intersectionPoint{ (1.0 - u - v) * _v1 + u * _v2 + v * _v3 };
 		return t; //intersection infront of ray origin
+	}
 
 	return NOT_FOUND; //intersection behind ray origin
 }

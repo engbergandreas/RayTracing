@@ -7,14 +7,14 @@
 
 class Ray {
 public:
-    Ray(glm::dvec3 const& start, glm::dvec3 const& end, glm::dvec3 const& color);
+    Ray(glm::dvec3 const& start, glm::dvec3 const& dir, glm::dvec3 const& importance_);
 
     glm::dvec3 rayDirection(bool normalize = true) const;
 
     glm::dvec3 startPoint;
-    glm::dvec3 endPoint;
-
-    glm::dvec3 rayColor;
+    glm::dvec3 direction;
+    glm::dvec3 intersectionPoint;
+    glm::dvec3 importance;
 
     Intersectable const* hitinfo;
 
