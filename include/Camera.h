@@ -8,6 +8,7 @@
 #include "EasyBMP.h"
 #include "Scene.h"
 #include "Raytree.h"
+#include <random>
 
 //Forward decl
 class Scene;
@@ -19,7 +20,7 @@ double const DELTA_HEIGHT{ 2.0 / CAMERA_PLANE_HEIGHT };
 
 class Camera {
 public:
-	Camera(bool useeye1 = true);
+	Camera(bool useeye1 = true, int ss = 0);
 	void render(Scene const& scene);
 	void writeToFile(std::string const& filename);
 
@@ -34,5 +35,7 @@ private:
 	std::vector<std::vector<Pixel>> cameraplane;
 	glm::dvec3 eyePos1{ -2.0, 0.0, 0.0 };
 	glm::dvec3 eyePos2{ -1.0, 0.0, 0.0 };
+
+	int const _supersampling;
 };
 #endif // !CAMERA_H_

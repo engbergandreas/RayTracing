@@ -11,7 +11,9 @@ int main()
 {
 	Scene scene{};
 	std::string filename{ "../images/test.bmp" };
-	Camera camera{ false };
+	
+	int const supersampling{ 2 };
+	Camera camera{ false, supersampling };
 
 	camera.render(scene);
 	camera.writeToFile(filename);
