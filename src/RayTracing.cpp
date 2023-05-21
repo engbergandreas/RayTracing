@@ -6,6 +6,7 @@
 #include "Triangle.h"
 #include "Scene.h"
 #include "Tetrahedron.h"
+#include <chrono>
 
 int main()
 {
@@ -14,8 +15,14 @@ int main()
 	
 	int const supersampling{ 2 };
 	Camera camera{ false, supersampling };
+	int maxDepth{ 3 };
 
-	camera.render(scene);
+	auto start = std::chrono::high_resolution_clock::now();
+	camera.render(scene, maxDepth);
+	auto stop = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+	std::cout << "Finished rendering in: " << duration.count() << " seconds\n";
+
 	camera.writeToFile(filename);
 	return 0;
 }

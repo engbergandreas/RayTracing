@@ -8,6 +8,7 @@
 #include "Tetrahedron.h"
 #include "Sphere.h"
 #include "Lightsource.h"
+#include "Utils.h"
 
 class Scene
 {

@@ -59,8 +59,16 @@ Camera::Camera(bool useEye1, int ss) : cameraplane{ CAMERA_PLANE_HEIGHT }, _supe
 	}
 }
 
-void Camera::render(Scene const& scene)
+void Camera::render(Scene const& scene, int const maxDepth)
 {
+	//Estimate remaining time to render every 10% of pixels
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point lastTimeCheck = begin;
+	int const totalPixels { CAMERA_PLANE_HEIGHT * CAMERA_PLANE_WIDTH };
+	int renderedPixels{ 0 };
+	int pixelSinceLastUpdate{ 0 };
+	double totalAverageTimePerPixel{ 0.0 };
+
 	for (size_t row{ 0 }; row < CAMERA_PLANE_HEIGHT; ++row) {
 		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
 
@@ -68,13 +76,14 @@ void Camera::render(Scene const& scene)
 			for (Ray& ray : pixel.rays) {
 				//Shoot the ray and build up a raytree
 				//scene.shootRayIntoScene(ray);
-				int maxDepth{ 3 };
 				RayTree rayTree{ scene, ray, maxDepth };
 				rayTree.createRayTree();
 
 				//Traverse raytree in backwards order to compute the color 
 				pixel.color += rayTree.computeRadiance();
 			}
+
+			++renderedPixels;
 
 			//This is not necessary as it will scale all pixels by the same amount. 
 			//However if there would be some form of dynamic rays per pixel then we would need to scale 
@@ -84,6 +93,23 @@ void Camera::render(Scene const& scene)
 				//pixel.color /= static_cast<double>(_supersampling * _supersampling);
 			//}
 		}
+
+		//Estimate remaining time, output every 10% of pixels rendered
+		if(renderedPixels % (totalPixels / 10) == 0){
+			std::chrono::steady_clock::time_point pixelBatchEnd = std::chrono::steady_clock::now();
+			long long int secondsSinceLastCheck{ std::chrono::duration_cast<std::chrono::seconds>(pixelBatchEnd - lastTimeCheck).count() };
+			double avgTimePerPixel = static_cast<double>(secondsSinceLastCheck) / static_cast<double>(renderedPixels - pixelSinceLastUpdate);
+			totalAverageTimePerPixel += avgTimePerPixel;
+			double pixelBatchCount = renderedPixels / static_cast<double>(totalPixels) * 10;
+
+			std::cout << "Rendered " << renderedPixels / static_cast<double>(totalPixels) * 100 << "% of pixels in " <<
+				std::chrono::duration_cast<std::chrono::seconds>(pixelBatchEnd - begin).count() << " seconds\n" << 
+				//"Estimated time remaining: " << avgTimePerPixel * (totalPixels - renderedPixels) << " seconds\n";
+				"Estimated time remaining: " << (totalAverageTimePerPixel / pixelBatchCount) * (totalPixels - renderedPixels) << " seconds\n";
+
+			lastTimeCheck = pixelBatchEnd;
+			pixelSinceLastUpdate = renderedPixels;
+		}	
 	}
 }
 
@@ -109,10 +135,9 @@ void Camera::writeToFile(std::string const& filename) {
 			//maxR = std::max(color.r, maxR);
 			//maxG = std::max(color.g, maxG);
 			//maxB = std::max(color.b, maxB);
-			
+
 			double max = std::max(std::max(color.r, color.g), color.b);
 			maxValue = std::max(max, maxValue);
-			
 		}
 	}
 

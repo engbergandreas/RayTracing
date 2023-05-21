@@ -35,9 +35,16 @@ void RayTree::buildRayTree(Node* ptr, int depth)
 	if (!ptr->_ray.hitinfo)
 		return;
 
-	//Exit early if we hit a diffuse surface. 
+	//Ray intersect diffuse surface, cast reflection ray in random direction
 	if (ptr->_ray.hitinfo->brdf().isDiffuse())
+	{
+		Node* diffuseReflection{ computeDiffiuseReflection(ptr->_ray) };
+		diffuseReflection->_parent = ptr;
+		ptr->_reflected = diffuseReflection;
+		++depth;
+		buildRayTree(ptr->_reflected, depth);
 		return;
+	}
 
 	//Compute reflection ray direction
 	Node* reflectedRay{ computeReflectedRay(ptr->_ray) };
@@ -64,7 +71,6 @@ void RayTree::buildRayTree(Node* ptr, int depth)
 
 	//Continue to build ray tree
 	buildRayTree(ptr->_refracted, depth);
-
 }
 
 glm::dvec3 RayTree::computeRayColor(Node* ptr)
@@ -106,8 +112,18 @@ glm::dvec3 RayTree::computeRayColor(Node* ptr)
 
 	//Radiance of parent is the combined radiance from reflected and refracted rays
 	//Plus that of the local illumination model
-	glm::dvec3 radiance = { (reflectedRadiance * reflectedImportance + refractedRadiance * refractedImportance) / ptr->_ray.importance +
-		localRadiance * LD_coeff };
+	//Due to color bleeding between diffuse surfaces, the importance can become 0 in one of the channels
+	//This avoid division by zero if that is the case. 
+	glm::dvec3 radiance{ 0.0 };
+	if (ptr->_ray.importance.r > 0.0)
+		radiance.r = (reflectedRadiance.r * reflectedImportance.r + refractedRadiance.r * refractedImportance.r) / ptr->_ray.importance.r;
+	if (ptr->_ray.importance.g > 0.0)
+		radiance.g = (reflectedRadiance.g * reflectedImportance.g + refractedRadiance.g * refractedImportance.g) / ptr->_ray.importance.g;
+	if (ptr->_ray.importance.b > 0.0)
+		radiance.b = (reflectedRadiance.b * reflectedImportance.b + refractedRadiance.b * refractedImportance.b) / ptr->_ray.importance.b;
+
+	//glm::dvec3 radiance = { (reflectedRadiance * reflectedImportance + refractedRadiance * refractedImportance) / ptr->_ray.importance +
+	radiance += localRadiance * LD_coeff;
 
 	return radiance;
 }
@@ -232,4 +248,72 @@ RayTree::Node* RayTree::computeRefractedRay(Ray const& inRay)
 
 	return new Node{ refractedRay };
 }
-	
+
+/*
+Estimator for lambertian reflection:
+PDF used is 1/(pi^2)
+We draw uniform values for x_i and y_i between 0 and 1 and map them
+so that phi_i = 2PIx_i and theta_i = PIy_i/2 
+*/
+//Based on lecture 6 - slide 21/22, lecture 9 - slide 14-18, lecture 10 - slide 22
+RayTree::Node* RayTree::computeDiffiuseReflection(Ray const& inRay) {
+	//Get the random azimuth and inclination angle for the random out direction
+	double x{ _rho_distribution(_generator) };
+	double y{ _theta_distribution(_generator) };
+	assert(x > 0.0 && x < 1.0);
+	assert(y > 0.0 && y < 1.0);
+	double azimuth{ 2.0 * static_cast<double>(std::_Pi) * x }; //rho
+	double inclination{ static_cast<double>(std::_Pi) * y / 2.0 }; //theta
+
+	//Compute local to world transformation matrix using the in ray
+	glm::dmat4 M_L2W{ localToWorld(inRay) };
+	//Compute the ray direction in local coordinate system
+	glm::dvec3 localOutRayDirection{ std::move(SphericalToCartesian(azimuth, inclination)) };
+	//Transform to world coordinates
+	glm::dvec3 worldOutRayDirection{ M_L2W * glm::dvec4{localOutRayDirection, 1.0} };
+	//Compute importance, lecture 9 slide 16
+	//W_child = W_parent * PI * rho * cos(theta_out) * sin(theta_out)
+	glm::dvec3 rayImportance{ static_cast<double>(std::_Pi) * inRay.hitinfo->brdf().lambertianReflectionCoeff *
+		inRay.hitinfo->color() * std::cos(inclination) * std::sin(inclination) * inRay.importance };
+
+	//rayImportance = glm::clamp(rayImportance, glm::dvec3{ 0.0 }, glm::dvec3{ 1.0 });
+
+	Ray reflectedRay{ inRay.intersectionPoint, worldOutRayDirection, rayImportance };
+
+	return new Node{ reflectedRay };
+	//Apply russian roulette?
+}
+
+glm::dmat4 RayTree::worldToLocal(Ray const& inRay) const {
+	//Compute X,Y,Z coordinate axis, 
+	//Z is the surface normal at the intersection point
+	//X is the orthogonal direction to Z, computed using the ray direction 
+	//Y is computed as the cross product
+	glm::dvec3 Z{ inRay.hitinfo->getNormal(inRay.intersectionPoint) };
+	glm::dvec3 I{ inRay.direction };
+	glm::dvec3 I_orthogonal{ I - (glm::dot(I, Z) * Z) };
+	glm::dvec3 X{ glm::normalize(I_orthogonal) };
+	glm::dvec3 Y{ glm::normalize(glm::cross(-X, Z)) };
+
+	glm::dmat4 T{ glm::translate(glm::dmat4{1.0}, -inRay.intersectionPoint) };
+	glm::dmat4 R{
+		glm::dvec4{ X, 0.0 },
+		glm::dvec4{ Y, 0.0 },
+		glm::dvec4{ Z, 0.0 },
+		glm::dvec4{ 0.0, 0.0, 0.0, 1.0 }
+	};
+	//No idea why M = R * T does not work, but transposing seem to do the trick;
+	return glm::transpose(R) * glm::transpose(T);
+}
+
+glm::dmat4 RayTree::localToWorld(Ray const& inRay) const {
+	return glm::inverse(worldToLocal(inRay));
+}
+
+glm::dvec3 RayTree::SphericalToCartesian(double rho, double theta) const {
+	return glm::dvec3{
+	    std::cos(rho) * std::sin(theta),
+		std::sin(rho) * std::sin(theta),
+		std::cos(theta)
+	};
+}

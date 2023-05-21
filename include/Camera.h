@@ -9,6 +9,7 @@
 #include "Scene.h"
 #include "Raytree.h"
 #include <random>
+#include <chrono>
 
 //Forward decl
 class Scene;
@@ -21,7 +22,7 @@ double const DELTA_HEIGHT{ 2.0 / CAMERA_PLANE_HEIGHT };
 class Camera {
 public:
 	Camera(bool useeye1 = true, int ss = 0);
-	void render(Scene const& scene);
+	void render(Scene const& scene, int const maxRayDepth);
 	void writeToFile(std::string const& filename);
 
 private:
