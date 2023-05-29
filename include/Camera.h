@@ -10,19 +10,22 @@
 #include "Raytree.h"
 #include <random>
 #include <chrono>
+#include "Utils.h"
+#include <thread>
+#include <mutex>
 
 //Forward decl
 class Scene;
 
-int const CAMERA_PLANE_WIDTH{ 800 };
-int const CAMERA_PLANE_HEIGHT{ 800 };
-double const DELTA_WIDTH{ 2.0 / CAMERA_PLANE_WIDTH };
-double const DELTA_HEIGHT{ 2.0 / CAMERA_PLANE_HEIGHT };
+int const CAMERA_PLANE_WIDTH{ settings::CAMERA_PLANE_WIDTH };
+int const CAMERA_PLANE_HEIGHT{ settings::CAMERA_PLANE_HEIGHT };
+double const DELTA_WIDTH{ settings::DELTA_WIDTH };
+double const DELTA_HEIGHT{ settings::DELTA_HEIGHT };
 
 class Camera {
 public:
 	Camera(bool useeye1 = true, int ss = 0);
-	void render(Scene const& scene, int const maxRayDepth);
+	void render(Scene const& scene);
 	void writeToFile(std::string const& filename);
 
 private:
@@ -32,11 +35,20 @@ private:
 		std::vector<Ray> rays;
 	}; //Pixel 
 
+	void computePixelColor(size_t rowstart, size_t rowend, Scene const& scene, std::chrono::steady_clock::time_point const& begin);
+	void updateTimeEstimate(std::chrono::steady_clock::time_point const& begin);
+
 	//Camera plane defined as Row<Column>
 	std::vector<std::vector<Pixel>> cameraplane;
 	glm::dvec3 eyePos1{ -2.0, 0.0, 0.0 };
 	glm::dvec3 eyePos2{ -1.0, 0.0, 0.0 };
 
 	int const _supersampling;
+	std::mutex _renderPixelLock;
+	int _renderedPixels{ 0 };
+	int _pixelSinceLastUpdate{ 0 };
+	double _totalAverageTimePerPixel{ 0.0 };
+
+	std::chrono::steady_clock::time_point _lastTimeCheck;
 };
 #endif // !CAMERA_H_

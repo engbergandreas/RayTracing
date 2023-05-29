@@ -5,20 +5,14 @@
 #include "Scene.h"
 #include <glm/glm.hpp>
 #include <random>
+#include "Utils.h"
 
 class Scene;
 
 class RayTree {
 public:
-	RayTree(Scene const& scene, Ray& ray, int maxDepth) :
-		_root{ new Node{ ray } }, _scene{ scene }, _maxDepth{ maxDepth } {
-		std::random_device rd; //Used as seed for generator, random device is a non-deterministic number generator
-		
-		_generator = std::mt19937(rd()); //Standard mersenne_twister_engine seeded with rd()
-		_theta_distribution = std::uniform_real_distribution<>{ 0.0, 1.0 };
-		_rho_distribution = std::uniform_real_distribution<>{ 0.0, 1.0 };
-	}
-	~RayTree() { delete _root; };
+	RayTree(Scene const& scene, Ray& ray);
+	~RayTree() { delete _root; }; //Rest of tree is deleted recursively by Node class
 
 	void createRayTree();
 	glm::dvec3 computeRadiance();
@@ -38,21 +32,22 @@ private:
 	};//Node
 
 	void buildRayTree(Node* ptr, int depth);
+	bool terminateRayPath(Node* ptr, int depth) const;
 	glm::dvec3 computeRayColor(Node* ptr);
 	glm::dvec3 shootShadowRay(Node* ptr);
+	bool isShadowRayVisible(Ray const& shadowRay) const;
 
 	Node* computeReflectedRay(Ray const& inRay);
 	Node* computeRefractedRay(Ray const& inRay);
 	Node* computeDiffiuseReflection(Ray const& inRay);
+	bool russianRoulette(Ray const& inRay, double randomValue) const;
 
 	glm::dmat4 worldToLocal(Ray const& inRay) const;
 	glm::dmat4 localToWorld(Ray const& inRay) const;
 	glm::dvec3 SphericalToCartesian(double phi, double theta) const;
 
-
 	Node* _root;
 	Scene const& _scene;
-	int _maxDepth;
 
 	std::uniform_real_distribution<> _theta_distribution;
 	std::uniform_real_distribution<> _rho_distribution;

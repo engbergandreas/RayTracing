@@ -4,7 +4,8 @@
 enum class Material {
     lambertian,
     specular,
-    transparent
+    transparent,
+    lightsource
 };
 
 class BRDF {

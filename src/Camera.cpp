@@ -59,57 +59,91 @@ Camera::Camera(bool useEye1, int ss) : cameraplane{ CAMERA_PLANE_HEIGHT }, _supe
 	}
 }
 
-void Camera::render(Scene const& scene, int const maxDepth)
-{
-	//Estimate remaining time to render every 10% of pixels
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	std::chrono::steady_clock::time_point lastTimeCheck = begin;
-	int const totalPixels { CAMERA_PLANE_HEIGHT * CAMERA_PLANE_WIDTH };
-	int renderedPixels{ 0 };
-	int pixelSinceLastUpdate{ 0 };
-	double totalAverageTimePerPixel{ 0.0 };
+void Camera::updateTimeEstimate(std::chrono::steady_clock::time_point const& begin) {
+	int const totalPixels{ CAMERA_PLANE_HEIGHT * CAMERA_PLANE_WIDTH };
 
-	for (size_t row{ 0 }; row < CAMERA_PLANE_HEIGHT; ++row) {
+	std::chrono::steady_clock::time_point pixelBatchEnd = std::chrono::steady_clock::now();
+	long long int secondsSinceLastCheck{ std::chrono::duration_cast<std::chrono::seconds>(pixelBatchEnd - _lastTimeCheck).count() };
+	double avgTimePerPixel = static_cast<double>(secondsSinceLastCheck) / static_cast<double>(_renderedPixels - _pixelSinceLastUpdate);
+	_totalAverageTimePerPixel += avgTimePerPixel;
+	double pixelBatchCount = _renderedPixels / static_cast<double>(totalPixels) * 10;
+
+	std::cout << "Rendered " << _renderedPixels / static_cast<double>(totalPixels) * 100 << "% of pixels in " <<
+		std::chrono::duration_cast<std::chrono::seconds>(pixelBatchEnd - begin).count() << " seconds\n" <<
+		//"Estimated time remaining: " << avgTimePerPixel * (totalPixels - renderedPixels) << " seconds\n";
+		"Estimated time remaining: " << (_totalAverageTimePerPixel / pixelBatchCount) * (totalPixels - _renderedPixels) << " seconds\n";
+
+	_lastTimeCheck = pixelBatchEnd;
+	_pixelSinceLastUpdate = _renderedPixels;
+}
+
+void Camera::computePixelColor(size_t rowstart, size_t rowend, Scene const& scene, std::chrono::steady_clock::time_point const& begin) {
+	int const totalPixels{ CAMERA_PLANE_HEIGHT * CAMERA_PLANE_WIDTH };
+	//Obs, boundary check must be done!
+	for (size_t row{ rowstart }; row < rowend && row < CAMERA_PLANE_HEIGHT; ++row) {
 		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
 
 			Pixel& pixel{ cameraplane[row][column] };
 			for (Ray& ray : pixel.rays) {
 				//Shoot the ray and build up a raytree
-				//scene.shootRayIntoScene(ray);
-				RayTree rayTree{ scene, ray, maxDepth };
+				RayTree rayTree{ scene, ray };
 				rayTree.createRayTree();
 
 				//Traverse raytree in backwards order to compute the color 
 				pixel.color += rayTree.computeRadiance();
+
+				//This is not necessary as it will scale all pixels by the same amount. 
+				//However if there would be some form of dynamic rays per pixel then we would need to scale 
+				//the colors to make the scene correct. 
+				//Divide color contribution by number of rays per pixel
+				//if (_supersampling > 1) {
+					//pixel.color /= static_cast<double>(_supersampling * _supersampling);
+				//}
 			}
+			//Critical section
+			{
+				//Lock mutex
+				std::unique_lock<std::mutex> lock{ _renderPixelLock };
+				++_renderedPixels;
+				//Estimate remaining time, output every 10% of pixels rendered
+				if (_renderedPixels % (totalPixels / 10) == 0)
+					updateTimeEstimate(begin);
+			} //Mutex is released on exiting critical section
+		}
+	}
+}
 
-			++renderedPixels;
+void Camera::render(Scene const& scene)
+{
+	//Estimate remaining time to render every 10% of pixels
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	_lastTimeCheck = begin;
 
-			//This is not necessary as it will scale all pixels by the same amount. 
-			//However if there would be some form of dynamic rays per pixel then we would need to scale 
-			//the colors to make the scene correct. 
-			//Divide color contribution by number of rays per pixel
-			//if (_supersampling > 1) {
-				//pixel.color /= static_cast<double>(_supersampling * _supersampling);
-			//}
+	if (settings::USE_MULTI_THREADING) {
+		//Use multithreading where each thread will compute
+		//some % of the pixels. TODO: find a better split between threads and pixels, as the workload
+		//can become uneven depending on where computationally heavy objects in the scene are located.
+		unsigned int const nThreads{ std::thread::hardware_concurrency() };
+		std::vector<std::thread> workers{};
+		for (unsigned int i{ 0 }; i < nThreads; i++) {
+			//Take the ceil of height / nthreads if the division gives a rest product this would miss a row in the output. 
+			size_t nRowsPerThread{ static_cast<size_t>(std::ceil(static_cast<double>(CAMERA_PLANE_HEIGHT) / nThreads)) };
+			size_t rowStart{ nRowsPerThread * i };
+			size_t rowEnd{ rowStart + nRowsPerThread };
+
+			std::thread worker(&Camera::computePixelColor, this, rowStart, rowEnd, std::ref(scene), std::ref(begin));
+			workers.push_back(std::move(worker));
 		}
 
-		//Estimate remaining time, output every 10% of pixels rendered
-		if(renderedPixels % (totalPixels / 10) == 0){
-			std::chrono::steady_clock::time_point pixelBatchEnd = std::chrono::steady_clock::now();
-			long long int secondsSinceLastCheck{ std::chrono::duration_cast<std::chrono::seconds>(pixelBatchEnd - lastTimeCheck).count() };
-			double avgTimePerPixel = static_cast<double>(secondsSinceLastCheck) / static_cast<double>(renderedPixels - pixelSinceLastUpdate);
-			totalAverageTimePerPixel += avgTimePerPixel;
-			double pixelBatchCount = renderedPixels / static_cast<double>(totalPixels) * 10;
-
-			std::cout << "Rendered " << renderedPixels / static_cast<double>(totalPixels) * 100 << "% of pixels in " <<
-				std::chrono::duration_cast<std::chrono::seconds>(pixelBatchEnd - begin).count() << " seconds\n" << 
-				//"Estimated time remaining: " << avgTimePerPixel * (totalPixels - renderedPixels) << " seconds\n";
-				"Estimated time remaining: " << (totalAverageTimePerPixel / pixelBatchCount) * (totalPixels - renderedPixels) << " seconds\n";
-
-			lastTimeCheck = pixelBatchEnd;
-			pixelSinceLastUpdate = renderedPixels;
-		}	
+		//Wait for all workers (threads) to finish their work.
+		for (std::thread& worker : workers) {
+			worker.join();
+		}
+	}
+	else {
+		//Use single thread
+		size_t rowStart{ 0 };
+		computePixelColor(rowStart, CAMERA_PLANE_HEIGHT, scene, begin);
 	}
 }
 
@@ -121,7 +155,6 @@ void Camera::writeToFile(std::string const& filename) {
 	//double maxR{ minD }, maxB{ minD }, maxG{ minD };
 	double maxValue{ minD };
 
-	std::vector<std::vector<glm::dvec3>> scaledColor(CAMERA_PLANE_HEIGHT);
 	for (size_t row{ 0 }; row < CAMERA_PLANE_HEIGHT; ++row) {
 		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
 			glm::dvec3 color{ cameraplane[row][column].color };

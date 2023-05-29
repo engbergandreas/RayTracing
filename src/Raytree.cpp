@@ -1,5 +1,15 @@
 #include "Raytree.h"
 
+RayTree::RayTree(Scene const& scene, Ray& ray) :
+	_root{ new Node{ ray } }, _scene{ scene } {
+	std::random_device rd; //Used as seed for generator, random device is a non-deterministic number generator
+
+	_generator = std::mt19937(rd()); //Standard mersenne_twister_engine seeded with rd()
+	//Create uniform distribution between (0,1)
+	_theta_distribution = std::uniform_real_distribution<>{ 0.0, 1.0 };
+	_rho_distribution = std::uniform_real_distribution<>{ 0.0, 1.0 };
+}
+
 void RayTree::createRayTree()
 {
 	buildRayTree(_root, 0);
@@ -17,32 +27,36 @@ void RayTree::buildRayTree(Node* ptr, int depth)
 	//continue recursively with the reflected and refracted rays.
 	//Rays will compute and store importance carried from camera.
 
-	double const IMPORTANCE_THRESHOLD{ 1e-5 };
-
-	//Exit early if we have reached max depth
-	if (depth > _maxDepth)
-		return;
-
-	//Exit early if ray contribution will not improve image quality
-	if (ptr->_ray.importance.r < IMPORTANCE_THRESHOLD &&
-		ptr->_ray.importance.g < IMPORTANCE_THRESHOLD &&
-		ptr->_ray.importance.b < IMPORTANCE_THRESHOLD)
-		return;
-
 	_scene.shootRayIntoScene(ptr->_ray);
 
-	//Ray did not hit anything, ideally it should not happen (closed room).
-	if (!ptr->_ray.hitinfo)
+	//Determine if we should terminate this ray path.
+	if (terminateRayPath(ptr, depth))
 		return;
 
-	//Ray intersect diffuse surface, cast reflection ray in random direction
+	++depth;
+
+	//Ray intersect diffuse surface, cast reflection ray in random direction.
 	if (ptr->_ray.hitinfo->brdf().isDiffuse())
 	{
 		Node* diffuseReflection{ computeDiffiuseReflection(ptr->_ray) };
-		diffuseReflection->_parent = ptr;
-		ptr->_reflected = diffuseReflection;
-		++depth;
-		buildRayTree(ptr->_reflected, depth);
+		if (diffuseReflection) {
+			diffuseReflection->_parent = ptr;
+			ptr->_reflected = diffuseReflection;
+			buildRayTree(ptr->_reflected, depth);
+		}
+
+		//This might actually cause an overestimate in the color value
+		//since computeRadiance will add both child radiance at the intersection.
+		//Should probably divide the radiance contribution by 2 if we use multiple reflections?
+		if (settings::MULTIPLE_DIFFUSE_REFLECTIONS) {
+			//Send another diffuse reflection ray
+			Node* diffuseReflection2{ computeDiffiuseReflection(ptr->_ray) };
+			if (diffuseReflection2) {
+				diffuseReflection2->_parent = ptr;
+				ptr->_refracted = diffuseReflection2;
+				buildRayTree(ptr->_refracted, depth);
+			}
+		}
 		return;
 	}
 
@@ -50,8 +64,6 @@ void RayTree::buildRayTree(Node* ptr, int depth)
 	Node* reflectedRay{ computeReflectedRay(ptr->_ray) };
 	reflectedRay->_parent = ptr;
 	ptr->_reflected = reflectedRay;
-
-	++depth;
 
 	//Continue to build ray tree
 	buildRayTree(ptr->_reflected, depth);
@@ -75,6 +87,19 @@ void RayTree::buildRayTree(Node* ptr, int depth)
 
 glm::dvec3 RayTree::computeRayColor(Node* ptr)
 {
+	//Check if first ray launched from camera directly hit the lightsource.
+	if (!ptr->_parent && ptr->_ray.hitinfo) {
+		// If lightsource was hit by the ray we take the radiance L0 directly from the lightsource
+		if (ptr->_ray.hitinfo->brdf()._material == Material::lightsource) {
+			//Divide the contribution by the number of rays casted per pixel
+			//Imo gives better looking results by reducing the scalar division, altough not entirely correct.
+			//Lecture 10, slide 6
+			int const raysPerPixel{ settings::SUPERSAMPLING /** settings::SUPERSAMPLING */};
+			//Lightsource store the radiance in the color channels
+			return ptr->_ray.hitinfo->color() / static_cast<double>(raysPerPixel);
+		}
+	}
+
 	glm::dvec3 reflectedRadiance{ 0.0, 0.0,0.0 };
 	glm::dvec3 refractedRadiance{ 0.0, 0.0,0.0 };
 	glm::dvec3 reflectedImportance{ 0.0, 0.0, 0.0 };
@@ -86,11 +111,11 @@ glm::dvec3 RayTree::computeRayColor(Node* ptr)
 		//In an ideal world all rays would hit an object
 		//this is a backup if a ray for some reason did not hit an object e.g., due to numerical errors
 		if (ptr->_ray.hitinfo) {
-			//Compute shadow ray which introduce radiance to the tree. Only for diffuse surfaces
+			//Cast shadow rays which introduce radiance to the tree. Only at diffuse surfaces!
 			if (ptr->_ray.hitinfo->brdf().isDiffuse())
 				return shootShadowRay(ptr);
-		}
 
+		}
 		return glm::dvec3{ 0.0,0.0,0.0 };
 	}
 
@@ -105,13 +130,19 @@ glm::dvec3 RayTree::computeRayColor(Node* ptr)
 		refractedImportance = ptr->_refracted->_ray.importance;
 	}
 
-	//Compute local contribution at every intersection by shooting shadow rays.
-	//Don't shoot shadow rays if we are at a transparent or specular object. 
-	glm::dvec3 localRadiance{ ptr->_ray.hitinfo->brdf().isDiffuse() ? shootShadowRay(ptr) : glm::dvec3{0.0, 0.0, 0.0} };
-	double LD_coeff{ 0.1 };
+	//This will and should never happen, however if this check is not made we get a warning when computing localRadiance.
+	if (!ptr->_ray.hitinfo) {
+		//std::cout << "This should never happen \n";
+		return glm::dvec3{ 0.0 };
+	}
 
-	//Radiance of parent is the combined radiance from reflected and refracted rays
-	//Plus that of the local illumination model
+	//Compute local contribution at every diffuse surface intersection by shooting shadow rays.
+	//Don't shoot shadow rays if we are at a transparent or specular or any other type of object.
+	glm::dvec3 localRadiance{ ptr->_ray.hitinfo->brdf().isDiffuse() ? shootShadowRay(ptr) : glm::dvec3{0.0, 0.0, 0.0} };
+	double LD_coeff{ settings::LOCAL_DIFFUSE_LIGHT_COEFFICIENT };
+
+	//Radiance of parent is the combined radiance from reflected and refracted rays 
+	//plus that of the local illumination model.
 	//Due to color bleeding between diffuse surfaces, the importance can become 0 in one of the channels
 	//This avoid division by zero if that is the case. 
 	glm::dvec3 radiance{ 0.0 };
@@ -122,46 +153,133 @@ glm::dvec3 RayTree::computeRayColor(Node* ptr)
 	if (ptr->_ray.importance.b > 0.0)
 		radiance.b = (reflectedRadiance.b * reflectedImportance.b + refractedRadiance.b * refractedImportance.b) / ptr->_ray.importance.b;
 
-	//glm::dvec3 radiance = { (reflectedRadiance * reflectedImportance + refractedRadiance * refractedImportance) / ptr->_ray.importance +
+	//Add local lightning contribution.
 	radiance += localRadiance * LD_coeff;
 
 	return radiance;
 }
 
+bool RayTree::terminateRayPath(Node* ptr, int depth) const {
+	//Terminate on:
+
+	//Ray did not hit anything, ideally it should not happen (closed room).
+	if (!ptr->_ray.hitinfo)
+		return true;
+
+	//Exit early if ray contribution will not improve image quality
+	if (ptr->_ray.importance.r < settings::IMPORTANCE_THRESHOLD &&
+		ptr->_ray.importance.g < settings::IMPORTANCE_THRESHOLD &&
+		ptr->_ray.importance.b < settings::IMPORTANCE_THRESHOLD)
+		return true;
+
+	//Exit early if we have reached transparent max depth,
+	//can be lower than max ray depth
+	if ((depth > settings::MAX_TRANSPARENT_DEPTH) &&
+		ptr->_ray.hitinfo->brdf()._material == Material::transparent)
+		return true;
+
+	//If we hit a lightsource we stop tracing. 
+	if (ptr->_ray.hitinfo->brdf()._material == Material::lightsource)
+		return true;
+
+	//We have reached an upper limit of rays.
+	if (depth > settings::MAX_RAY_DEPTH)
+		return true;
+
+	return false;
+}
+
 glm::dvec3 RayTree::shootShadowRay(Node* ptr) {
-	
-	Lightsource light{ _scene.getLightSources().back()};
-	glm::dvec3 intersectionPoint{ ptr->_ray.intersectionPoint };
-	glm::dvec3 sRayEndPoint{ light.position };
-	glm::dvec3 sRayDir{ sRayEndPoint - intersectionPoint };
+	//Shoot shadow rays at area lightsource, compute their radiance contribution. 
+	glm::dvec3 radiance{ 0.0 };
+	for (Lightsource const& lightsource : _scene.getLightSources()) {
+		double sideLength{ lightsource.sideLength() };
+		glm::dvec3 const& startPosition{ ptr->_ray.intersectionPoint };
+		glm::dvec3 intersectionNormal{ ptr->_ray.hitinfo->getNormal(startPosition) };
 
-	Ray shadowRay{ intersectionPoint, sRayDir, glm::dvec3{ 0.0 } };
+		glm::dvec3 irradiance{ 0.0 };
+		size_t const NUMBER_SHADOW_RAYS{ settings::NUMBER_OF_SHADOW_RAYS };
+		for (size_t i{ 0 }; i < NUMBER_SHADOW_RAYS; i++) {
+			double c1{ _rho_distribution(_generator) * sideLength };
+			double c2{ _rho_distribution(_generator) * sideLength };
+			glm::dvec3 pointOnLightsrc{ std::move(lightsource.getRandomPointOnSurface(c1,c2)) };
 
-	//Check if shadow ray is intersecting another object before reaching light source
-	std::vector<Intersectable*> const& objects{ _scene.getObjects() };
-	for (Intersectable const*  obj : objects) {
-		//Simplification, shadowrays ignore transparent objects.
-		if (obj->brdf()._material == Material::transparent)
+			glm::dvec3 shadowDirection{ pointOnLightsrc - startPosition };
+			Ray shadowRay{ startPosition, shadowDirection, glm::dvec3{0.0} };
+
+			//Point is in shadow by other object, no light contribution. 
+			if (!isShadowRayVisible(shadowRay)) {
+				continue;
+			}
+
+			//Geometric term
+			glm::dvec3 Sdir{ shadowRay.rayDirection() };
+			double cosThetaIn{ glm::dot(Sdir, intersectionNormal) };
+			double cosThetaL{ glm::dot(-Sdir, lightsource.normal(pointOnLightsrc)) };
+			cosThetaIn = glm::clamp(cosThetaIn, 0.0, 1.0);
+			cosThetaL = glm::clamp(cosThetaL, 0.0, 1.0);
+
+			double GeometricTerm{ cosThetaIn * cosThetaL / glm::dot(shadowDirection, shadowDirection) };
+			
+			irradiance += GeometricTerm;
+		}
+		//Lecture 10 slide 11
+		glm::dvec3 sigma{ ptr->_ray.hitinfo->brdf().lambertianReflectionCoeff };
+		radiance += sigma * ptr->_ray.hitinfo->color() * lightsource.L0() * sideLength * sideLength * irradiance /
+			(static_cast<double>(NUMBER_SHADOW_RAYS) * M_PI);
+	}
+	return radiance / static_cast<double>(_scene.getLightSources().size());
+
+
+	/*Code used for point lightsource*/
+	//Lightsource light{ _scene.getLightSources().back()};
+	//glm::dvec3 intersectionPoint{ ptr->_ray.intersectionPoint };
+	//glm::dvec3 sRayEndPoint{ light._position };
+	//glm::dvec3 sRayDir{ sRayEndPoint - intersectionPoint };
+
+	//Ray shadowRay{ intersectionPoint, sRayDir, glm::dvec3{ 0.0 } };
+
+	////Check if shadow ray is intersecting another object before reaching light source
+	//std::vector<Intersectable*> const& objects{ _scene.getObjects() };
+	//for (Intersectable const*  obj : objects) {
+	//	//Simplification, shadowrays ignore transparent objects.
+	//	if (obj->brdf()._material == Material::transparent ||
+	//		obj->brdf()._material == Material::lightsource)
+	//		continue;
+
+	//	double t = obj->rayIntersection(shadowRay);
+	//	if (t > 0.0 && t < (1.0 - EPS)) {
+	//		return glm::dvec3{ 0.0, 0.0, 0.0 }; //Point is in shadow of another object, no light contribution.
+	//	}
+	//}
+
+	//double r{ glm::length(shadowRay.rayDirection(false)) };
+
+	//double cosTheta{ glm::dot(shadowRay.rayDirection(), ptr->_ray.hitinfo->getNormal(intersectionPoint)) };
+	//cosTheta = glm::clamp(cosTheta, 0.0, 1.0);
+	//
+	//double Sigma{ light.cross_section / (r * r) };
+	//glm::dvec3 irradiance{ Sigma * cosTheta * light._L0 };
+
+	//glm::dvec3 rho{ ptr->_ray.hitinfo->brdf().lambertianReflectionCoeff };
+	//glm::dvec3 emittedLight{ rho * irradiance / M_PI };
+
+	//return ptr->_ray.hitinfo->color() * emittedLight;
+}
+
+bool RayTree::isShadowRayVisible(Ray const& shadowRay) const {
+	for (Intersectable const* obj : _scene.getObjects()) {
+		if (obj->brdf()._material == Material::transparent ||
+			obj->brdf()._material == Material::lightsource) //TODO: check if the lightsource we are aiming for is the obj, other lightsources might still block
 			continue;
 
 		double t = obj->rayIntersection(shadowRay);
 		if (t > 0.0 && t < (1.0 - EPS)) {
-			return glm::dvec3{ 0.0, 0.0, 0.0 }; //Point is in shadow of another object, no light contribution.
+			return false; //Point is in shadow of another object.
 		}
 	}
 
-	double r{ glm::length(shadowRay.rayDirection(false)) };
-
-	double cosTheta{ glm::dot(shadowRay.rayDirection(), ptr->_ray.hitinfo->getNormal(intersectionPoint)) };
-	cosTheta = glm::clamp(cosTheta, 0.0, 1.0);
-	
-	double Sigma{ light.cross_section / (r * r) };
-	glm::dvec3 irradiance{ Sigma * cosTheta * light.L0 };
-
-	glm::dvec3 rho{ ptr->_ray.hitinfo->brdf().lambertianReflectionCoeff };
-	glm::dvec3 emittedLight{ rho * irradiance / 3.14159 };
-
-	return ptr->_ray.hitinfo->color() * emittedLight;
+	return true;
 }
 
 RayTree::Node* RayTree::computeReflectedRay(Ray const& inRay)
@@ -180,7 +298,7 @@ RayTree::Node* RayTree::computeReflectedRay(Ray const& inRay)
 	//Lecture 5 page 10
 	if (inRay.hitinfo->brdf()._material == Material::transparent) {
 		double cosTheta{ glm::dot(surfaceNormal, -inRay.rayDirection()) };
-		double n1{ 1.0 }; //ior air
+		double n1{ constants::IOR_AIR }; //ior air
 		double n2{ inRay.hitinfo->brdf().ior };
 		double R0{ ((n1 - n2) / (n1 + n2)) * ((n1 - n2) / (n1 + n2)) };
 		reflectiveCoefficient = glm::dvec3{ R0 + (1 - R0) * std::pow(1 - cosTheta, 5) };
@@ -262,8 +380,14 @@ RayTree::Node* RayTree::computeDiffiuseReflection(Ray const& inRay) {
 	double y{ _theta_distribution(_generator) };
 	assert(x > 0.0 && x < 1.0);
 	assert(y > 0.0 && y < 1.0);
-	double azimuth{ 2.0 * static_cast<double>(std::_Pi) * x }; //rho
-	double inclination{ static_cast<double>(std::_Pi) * y / 2.0 }; //theta
+	//rho
+	double azimuth{ 2.0 * M_PI * x };
+	//theta
+	double inclination{ M_PI_2 * y };
+
+	//Terminate lambertian rays using Russian roulette
+	if (russianRoulette(inRay, x))
+		return nullptr;
 
 	//Compute local to world transformation matrix using the in ray
 	glm::dmat4 M_L2W{ localToWorld(inRay) };
@@ -273,15 +397,25 @@ RayTree::Node* RayTree::computeDiffiuseReflection(Ray const& inRay) {
 	glm::dvec3 worldOutRayDirection{ M_L2W * glm::dvec4{localOutRayDirection, 1.0} };
 	//Compute importance, lecture 9 slide 16
 	//W_child = W_parent * PI * rho * cos(theta_out) * sin(theta_out)
-	glm::dvec3 rayImportance{ static_cast<double>(std::_Pi) * inRay.hitinfo->brdf().lambertianReflectionCoeff *
-		inRay.hitinfo->color() * std::cos(inclination) * std::sin(inclination) * inRay.importance };
-
-	//rayImportance = glm::clamp(rayImportance, glm::dvec3{ 0.0 }, glm::dvec3{ 1.0 });
+	glm::dvec3 const& sigma{ inRay.hitinfo->brdf().lambertianReflectionCoeff };
+	glm::dvec3 F_theta{ M_PI * sigma * inRay.hitinfo->color() * std::cos(inclination) * std::sin(inclination) };
+	glm::dvec3 alpha{ 1.0 - sigma };
+	//Compensate importance with 1/(1-alpha), alpha = 1 - sigma
+	//This is because of russian roulette, see lecture 10 slide 23
+	glm::dvec3 rayImportance{ F_theta / (1.0 - alpha) * inRay.importance  };
 
 	Ray reflectedRay{ inRay.intersectionPoint, worldOutRayDirection, rayImportance };
 
 	return new Node{ reflectedRay };
-	//Apply russian roulette?
+}
+
+bool RayTree::russianRoulette(Ray const& inRay, double randomValue) const {
+	//if randomvalue is between 0 and 1-alpha we keep the value otherwise discard
+	//if alpha is 1-sigma and sigma is 1 we get 1-(1-1) = 1 so 100% that we will keep the values
+	//if sigma is 0.8 we get 1-(1-0.8) = 1-0.2 = 0.8
+	double sigma{ inRay.hitinfo->brdf().lambertianReflectionCoeff.x };
+	double alpha{ 1.0 - sigma };
+	return randomValue >= 1.0 - alpha; //this folds to  >= sigma...
 }
 
 glm::dmat4 RayTree::worldToLocal(Ray const& inRay) const {

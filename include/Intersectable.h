@@ -4,11 +4,12 @@
 #include "Ray.h"
 #include <glm/glm.hpp>
 #include "BRDF.h"
+#include "Utils.h"
 
 class Ray;
 
-double const EPS = 1e-7;
-const double NOT_FOUND = -1.0;
+double const EPS{ constants::EPSILON };
+const double NOT_FOUND{ constants::NOT_FOUND };
 
 class Intersectable {
 public:

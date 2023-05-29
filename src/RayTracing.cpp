@@ -7,18 +7,19 @@
 #include "Scene.h"
 #include "Tetrahedron.h"
 #include <chrono>
+#include "Utils.h"
+#include <thread>
 
 int main()
 {
+	//std::cout << nThreads << " concurrent threads are supported\n";
 	Scene scene{};
-	std::string filename{ "../images/test.bmp" };
+	std::string filename{ settings::FILENAME };
 	
-	int const supersampling{ 2 };
-	Camera camera{ false, supersampling };
-	int maxDepth{ 3 };
+	Camera camera{ false, settings::SUPERSAMPLING };
 
 	auto start = std::chrono::high_resolution_clock::now();
-	camera.render(scene, maxDepth);
+	camera.render(scene);
 	auto stop = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
 	std::cout << "Finished rendering in: " << duration.count() << " seconds\n";

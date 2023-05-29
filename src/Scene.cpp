@@ -95,12 +95,18 @@ Scene::Scene() {
 
 
 	//Add light sources
-	Lightsource sphericalLight{ glm::dvec3{5.0, 0.0, 5.0}, {1.0, 1.0, 1.0}, 0.1 };
-	lightSources.push_back(sphericalLight);
+	//Lightsource sphericalLight{ glm::dvec3{5.0, 0.0, 5.0}, {1.0, 1.0, 1.0}, 0.1 };
+	//lightSources.push_back(sphericalLight);
+	Lightsource areaLightsource{ glm::dvec3{6.0, 0.0, 4.9998}, glm::dvec3{ 1.0 }, 3.0 };
+	addLightsource(areaLightsource);
 }
 
 Scene::~Scene() {
-	for (Intersectable* obj : objects) {
+	for (Intersectable const* obj : objects) {
+		//Lightsources will remove their own triangles
+		if (obj->brdf()._material == Material::lightsource)
+			continue;
+
 		delete obj;
 	}
 }
@@ -115,52 +121,20 @@ void Scene::shootRayIntoScene(Ray& ray) const
 			ray.hitinfo = obj;
 		}
 	}
+
+	//If ray did not intersect an object 
+	//if (!ray.hitinfo)	
+		//return;
 	
-	//If object is of type sphere we need to normalize ray direction
-	//using pointer dynamic castin
+	//If object is of type sphere we need to normalize ray direction, abit unclear why but it causes 
+	//wierd bugs with the color/shadow otherwise. 
+	//Check if we hit a sphere using dynamic ptr casting (returns null if we cannot convert to a sphere object). 
 	if (dynamic_cast<Sphere const*>(ray.hitinfo)) {
 		ray.intersectionPoint = ray.startPoint + closest_t * ray.rayDirection();
 	}
 	else {
 		ray.intersectionPoint = ray.startPoint + closest_t * ray.rayDirection(false);
 	}
-
-	//if (!ray.hitinfo)
-	//	return;
-		
-	//Lightsource light{ lightSources.back() };
-	//glm::dvec3 intersectionPoint{ ray.startPoint + closest_t * ray.rayDirection() };
-	//glm::dvec3 sRayEndPoint{ light.position };
-	//glm::dvec3 sRayDir{ sRayEndPoint - intersectionPoint };
-
-	//Ray shadowRay{ intersectionPoint, sRayDir, {0.0, 0.0, 0.0} };
-
-	////Check if shadow ray is intersecting another object before reaching light source
-	//for (Intersectable const*  obj : objects) {
-	//	double t = obj->rayIntersection(shadowRay);
-	//	if (t > 0.0 && t < (1.0 - EPS)) {
-	//		ray.rayColor = { 0.0, 0.0, 0.0 };
-	//		return;
-	//	}
-	//}
-
-	//double r{ glm::length(shadowRay.rayDirection(false)) };
-
-	//double cosTheta{ glm::dot(shadowRay.rayDirection(), ray.hitinfo->getNormal(intersectionPoint)) };
-	//cosTheta = std::max(cosTheta, 0.0);
-
-	//double Sigma{ light.cross_section / (r * r) };
-	//glm::dvec3 irradiance{ Sigma * cosTheta * light.L0 };
-	//
-	//glm::dvec3 rho{ 1.0, 1.0, 1.0 };
-
-	//glm::dvec3 emittedLight{ rho * irradiance / 3.14159 };
-
-	//ray.rayColor = ray.hitinfo->color() * emittedLight;
-
-	//
-	////ray.rayColor = ray.hitinfo->color();
-	
 }
 
 std::vector<Lightsource> const& Scene::getLightSources() const
@@ -168,7 +142,14 @@ std::vector<Lightsource> const& Scene::getLightSources() const
 	return lightSources;
 }
 
-std::vector<Intersectable*> const& Scene::getObjects() const
+std::vector<Intersectable const*> const& Scene::getObjects() const
 {
 	return objects;
+}
+
+void Scene::addLightsource(Lightsource const& source) {
+	lightSources.push_back(source);
+	for (Triangle const& t : lightSources.back().surface()) {
+		objects.push_back(&t);
+	}
 }

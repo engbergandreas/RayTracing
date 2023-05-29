@@ -10,6 +10,8 @@
 #include "Lightsource.h"
 #include "Utils.h"
 
+class Lightsource;
+
 class Scene
 {
 public:
@@ -19,10 +21,12 @@ public:
 	void shootRayIntoScene(Ray& ray) const;
 
 	std::vector<Lightsource> const& getLightSources() const;
-	std::vector<Intersectable*> const& getObjects() const;
+	std::vector<Intersectable const*> const& getObjects() const;
 
 private:
-	std::vector<Intersectable*> objects;
+	void addLightsource(Lightsource const& source);
+
+	std::vector<Intersectable const*> objects;
 	std::vector<Lightsource> lightSources;
 };
 #endif // !SCENE_H_
