@@ -115,6 +115,16 @@ glm::dvec3 RayTree::computeRayColor(Node* ptr)
 			if (ptr->_ray.hitinfo->brdf().isDiffuse())
 				return shootShadowRay(ptr);
 
+			//If we hit the lightsource directly after hitting a mirror we will contribute a larger 
+			//portion of the lightsrc radiance, this is to create more realistic reflections of lightsources
+			//in the mirror.
+			if (ptr->_ray.hitinfo->brdf()._material == Material::lightsource && 
+				ptr->_parent->_ray.hitinfo->brdf()._material == Material::specular) {
+				int const raysPerPixel{ settings::SUPERSAMPLING /** settings::SUPERSAMPLING */ };
+				//Lightsource store the radiance in the color channels
+				return ptr->_ray.hitinfo->color() / static_cast<double>(raysPerPixel);
+			}
+
 		}
 		return glm::dvec3{ 0.0,0.0,0.0 };
 	}

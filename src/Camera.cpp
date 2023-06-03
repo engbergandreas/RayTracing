@@ -1,62 +1,59 @@
 #include "Camera.h"
 
-Camera::Camera(bool useEye1, int ss) : cameraplane{ CAMERA_PLANE_HEIGHT }, _supersampling{ ss }
+Camera::Camera(bool useEye1, int ss) : 
+	cameraplane{ CAMERA_PLANE_HEIGHT, std::vector<Pixel>{ CAMERA_PLANE_WIDTH } }, _supersampling{ ss }, _useEye1{ useEye1 }
 {
 	std::random_device rd; //Used as seed for generator, random device is a non-deterministic number generator
-	std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+	_gen = std::mt19937(rd()); //Standard mersenne_twister_engine seeded with rd()
+}
 
-	//[0,0] defined as the lower left corner of the camera plane [height - 1, width - 1] -> top right corner
-	for (size_t row{ 0 }; row < CAMERA_PLANE_HEIGHT; ++row) {
-		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
+std::vector<Ray> Camera::createPixelRays(size_t row, size_t column) { //This should rather be const, but it generates error C3848 for _gen
+	double const y{ row * DELTA_HEIGHT - (1.0 - DELTA_HEIGHT / 2.0) };
+	double const z{ column * DELTA_HEIGHT - (1.0 - DELTA_WIDTH / 2.0) };
 
-			double const y{ row * DELTA_HEIGHT - (1.0 - DELTA_HEIGHT / 2.0) };
-			double const z{ column * DELTA_HEIGHT - (1.0 - DELTA_WIDTH / 2.0) };
-			
-			std::vector<Ray> rays;
-			glm::dvec3 importance{ glm::dvec3{1.0, 1.0, 1.0} };
+	std::vector<Ray> rays;
+	glm::dvec3 importance{ glm::dvec3{1.0, 1.0, 1.0} };
 
-			//This is a fallback if we don't want super sampling to get atleast one ray per pixel.
-			if (_supersampling < 2) {
-				glm::dvec3 rayStartPoint{ useEye1 ? eyePos1 : eyePos2 };
-				glm::dvec3 rayEndpoint{ 0.0, y, z };
+	//This is a fallback if we don't want super sampling to get atleast one ray per pixel.
+	if (_supersampling < 2) {
+		glm::dvec3 rayStartPoint{ _useEye1 ? eyePos1 : eyePos2 };
+		glm::dvec3 rayEndpoint{ 0.0, y, z };
+		glm::dvec3 rayDir{ rayEndpoint - rayStartPoint };
+		Ray ray{ rayStartPoint, rayDir, importance };
+		rays.push_back(ray);
+	}
+	else {
+		//Create subpixels in a uniform grid 
+		for (int r{ -_supersampling / 2 }; r <= _supersampling / 2; ++r) {
+			if (r == 0)
+				continue;
+			for (int c{ -_supersampling / 2 }; c <= _supersampling / 2; ++c) {
+				if (c == 0)
+					continue;
+				//Center of subpixel
+				double y_ss = y + r * DELTA_HEIGHT / (2.0 * _supersampling);
+				double z_ss = z + c * DELTA_WIDTH / (2.0 * _supersampling);
+				//Get min and max of subpixel
+				double ymin = y_ss - DELTA_HEIGHT / (2.0 + _supersampling);
+				double ymax = y_ss + DELTA_HEIGHT / (2.0 + _supersampling);
+				double zmin = z_ss - DELTA_WIDTH / (2.0 + _supersampling);
+				double zmax = z_ss + DELTA_WIDTH / (2.0 + _supersampling);
+				//Create distribution to draw random number from in the range [min, max)
+				std::uniform_real_distribution<> disY{ ymin, ymax };
+				std::uniform_real_distribution<> disZ{ zmin, zmax };
+				//Get random point in subpixel
+				double rY = disY(_gen);
+				double rZ = disZ(_gen);
+
+				glm::dvec3 rayStartPoint{ _useEye1 ? eyePos1 : eyePos2 };
+				glm::dvec3 rayEndpoint{ 0.0, rY, rZ };
 				glm::dvec3 rayDir{ rayEndpoint - rayStartPoint };
 				Ray ray{ rayStartPoint, rayDir, importance };
 				rays.push_back(ray);
 			}
-
-			//Create subpixels in a uniform grid 
-			for(int r{-_supersampling/2}; r <= _supersampling/2; ++r){
-				if (r == 0)
-					continue;
-				for(int c{-_supersampling /2}; c <= _supersampling / 2; ++c){
-					if (c == 0)
-						continue;
-					//Center of subpixel
-					double y_ss = y + r * DELTA_HEIGHT / (2.0 * _supersampling);
-					double z_ss = z + c * DELTA_WIDTH / (2.0 * _supersampling);
-					//Get min and max of subpixel
-					double ymin = y_ss - DELTA_HEIGHT / (2.0 + _supersampling);
-					double ymax = y_ss + DELTA_HEIGHT / (2.0 + _supersampling);
-					double zmin = z_ss - DELTA_WIDTH / (2.0 + _supersampling);
-					double zmax = z_ss + DELTA_WIDTH / (2.0 + _supersampling);
-					//Create distribution to draw random number from in the range [min, max)
-					std::uniform_real_distribution<> disY{ ymin, ymax };
-					std::uniform_real_distribution<> disZ{ zmin, zmax };
-					//Get random point in subpixel
-					double rY = disY(gen);
-					double rZ = disZ(gen);
-
-					glm::dvec3 rayStartPoint{ useEye1 ? eyePos1 : eyePos2 };
-					glm::dvec3 rayEndpoint{ 0.0, rY, rZ };
-					glm::dvec3 rayDir{ rayEndpoint - rayStartPoint };
-					Ray ray{ rayStartPoint, rayDir, importance };
-					rays.push_back(ray);
-				}
-			}
-
-			cameraplane[row].push_back(Pixel{ rays });
 		}
 	}
+	return rays;
 }
 
 void Camera::updateTimeEstimate(std::chrono::steady_clock::time_point const& begin) {
@@ -80,11 +77,13 @@ void Camera::updateTimeEstimate(std::chrono::steady_clock::time_point const& beg
 void Camera::computePixelColor(size_t rowstart, size_t rowend, Scene const& scene, std::chrono::steady_clock::time_point const& begin) {
 	int const totalPixels{ CAMERA_PLANE_HEIGHT * CAMERA_PLANE_WIDTH };
 	//Obs, boundary check must be done!
+	//[0,0] defined as the lower left corner of the camera plane [height - 1, width - 1] -> top right corner
 	for (size_t row{ rowstart }; row < rowend && row < CAMERA_PLANE_HEIGHT; ++row) {
 		for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
 
+			std::vector<Ray> rays{ createPixelRays(row, column) };
 			Pixel& pixel{ cameraplane[row][column] };
-			for (Ray& ray : pixel.rays) {
+			for (Ray& ray : rays) {
 				//Shoot the ray and build up a raytree
 				RayTree rayTree{ scene, ray };
 				rayTree.createRayTree();

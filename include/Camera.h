@@ -30,11 +30,12 @@ public:
 
 private:
 	struct Pixel {
-		Pixel(std::vector<Ray> const& _rays) : rays{ _rays } {}
+		Pixel(/*std::vector<Ray> const& _rays*/) /*: rays{ _rays }*/ {}
 		glm::dvec3 color{ 0.0, 0.0, 0.0 };
-		std::vector<Ray> rays;
+		//std::vector<Ray> rays;
 	}; //Pixel 
 
+	std::vector<Ray> createPixelRays(size_t row, size_t column);
 	void computePixelColor(size_t rowstart, size_t rowend, Scene const& scene, std::chrono::steady_clock::time_point const& begin);
 	void updateTimeEstimate(std::chrono::steady_clock::time_point const& begin);
 
@@ -42,6 +43,7 @@ private:
 	std::vector<std::vector<Pixel>> cameraplane;
 	glm::dvec3 eyePos1{ -2.0, 0.0, 0.0 };
 	glm::dvec3 eyePos2{ -1.0, 0.0, 0.0 };
+	bool _useEye1;
 
 	int const _supersampling;
 	std::mutex _renderPixelLock;
@@ -49,6 +51,7 @@ private:
 	int _pixelSinceLastUpdate{ 0 };
 	double _totalAverageTimePerPixel{ 0.0 };
 
+	std::mt19937 _gen; //Standard mersenne_twister_engine seeded with rd()
 	std::chrono::steady_clock::time_point _lastTimeCheck;
 };
 #endif // !CAMERA_H_

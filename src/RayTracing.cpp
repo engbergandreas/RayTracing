@@ -5,7 +5,6 @@
 #include "Camera.h"
 #include "Triangle.h"
 #include "Scene.h"
-#include "Tetrahedron.h"
 #include <chrono>
 #include "Utils.h"
 #include <thread>
@@ -15,7 +14,7 @@ int main()
 	//std::cout << nThreads << " concurrent threads are supported\n";
 	Scene scene{};
 	std::string filename{ settings::FILENAME };
-	
+
 	Camera camera{ false, settings::SUPERSAMPLING };
 
 	auto start = std::chrono::high_resolution_clock::now();

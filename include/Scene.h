@@ -5,12 +5,13 @@
 #include "Ray.h"
 #include "Intersectable.h"
 #include "Triangle.h"
-#include "Tetrahedron.h"
+#include "Object.h"
 #include "Sphere.h"
 #include "Lightsource.h"
 #include "Utils.h"
 
 class Lightsource;
+class Object;
 
 class Scene
 {
@@ -25,6 +26,7 @@ public:
 
 private:
 	void addLightsource(Lightsource const& source);
+	void addObject(Object& source);
 
 	std::vector<Intersectable const*> objects;
 	std::vector<Lightsource> lightSources;

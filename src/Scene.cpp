@@ -73,19 +73,39 @@ Scene::Scene() {
 	Tetrahedron tetra{ glm::dvec3{0.52, 0.32, 0.87}, specularBrdf };
 	glm::dmat4 S{ glm::scale(glm::dmat4{ 1.0 }, glm::dvec3{ 2.0, 2.0, 2.0 }) };
 	glm::dmat4 R{ glm::rotate(glm::dmat4{1.0}, glm::radians(-35.0), glm::dvec3{0.0, 0.0, 1.0}) };
-	glm::dmat4 R2{ glm::rotate(glm::dmat4{1.0}, glm::radians(30.0), glm::dvec3{0.0, 1.0, 0.0})};
-	glm::dmat4 T{ glm::translate(glm::dmat4{1.0}, glm::dvec3{4.0, 3.0, -1.0}) };
-	tetra.transformObject(S);
-	tetra.transformObject(R2);
-	tetra.transformObject(R);
-	tetra.transformObject(T);
+	glm::dmat4 R2{ glm::rotate(glm::dmat4{1.0}, glm::radians(30.0), glm::dvec3{0.0, 1.0, 0.0}) };
+	glm::dmat4 T{ glm::translate(glm::dmat4{1.0}, glm::dvec3{5.5, 0.0, 1.0}) };
+	glm::dmat4 M{ T * R * R2 * S };
 
-	for (auto&& triangle : tetra.sides) {
-		objects.push_back(new Triangle{ std::move(triangle) });
-	}
-	
-	Sphere* sphere{ new Sphere{glm::dvec3{5.0, 0.0, -2.0}, glm::dvec3{0.7, 0.2, 0.4}, 1.0, transparentBrdf } };
+	tetra.transformObject(M);
+	addObject(tetra);
+
+	Sphere* sphere{ new Sphere{glm::dvec3{ 4.5, -2.5, -1.5 }, glm::dvec3{ 0.7, 0.2, 0.4 }, 1.0, BRDF{ Material::lambertian, glm::dvec3{ 0.5 }, 1.0 } } };
 	objects.push_back(sphere);
+
+	Sphere* sphere2{ new Sphere{glm::dvec3{ 4.5, 0.0, -1.5 }, glm::dvec3{ 0.2, 0.8, 0.4 }, 1.0, specularBrdf } };
+	objects.push_back(sphere2);
+
+	Sphere* sphere3{ new Sphere{glm::dvec3{ 4.5, 2.5, -1.5 }, color::ORANGE, 1.0, diffuseBrdf } };
+	objects.push_back(sphere3);
+
+	Sphere* sphere4{ new Sphere{glm::dvec3{ 6.5, 4.0, 2.0 }, glm::dvec3{ 0.7, 0.2, 0.4 }, 1.0, transparentBrdf } };
+	objects.push_back(sphere4);
+
+	//Create 3 cubes.
+	S = glm::scale(glm::dmat4{ 1.0 }, glm::dvec3{ 1.5, 1.5, 1.5 });
+	for (int i{ 0 }; i < 3; i++) {
+		Cube cube{ color::WHITE, diffuseBrdf };
+		T = glm::translate(glm::dmat4{ 1.0 }, glm::dvec3{ 4.5, -2.5 + 2.5 * i, -3.5 });
+		cube.transformObject(T * S);
+		addObject(cube);
+	}
+
+	Cube cube2{ color::WHITE, specularBrdf };
+	T = glm::translate(glm::dmat4{ 1.0 }, glm::dvec3{ 4.5, -3.5, 1.5 });
+	cube2.transformObject(T * S);
+	addObject(cube2);
+
 
 	////Optional glas wall infront of the scene
 	//Triangle* glas{ new Triangle{ {3.0, 6.0, -5.0}, {3.0, -6.0, -5.0}, {3.0, -6.0, 5.0 }, { 1.0, 0.0, 0.5 }, transparentBrdf } };
@@ -151,5 +171,12 @@ void Scene::addLightsource(Lightsource const& source) {
 	lightSources.push_back(source);
 	for (Triangle const& t : lightSources.back().surface()) {
 		objects.push_back(&t);
+	}
+}
+
+void Scene::addObject(Object& source)
+{
+	for (Triangle& triangle : source.sides) {
+		objects.push_back(new Triangle{ std::move(triangle) });
 	}
 }
