@@ -1,14 +1,7 @@
 #include "Raytree.h"
 
 RayTree::RayTree(Scene const& scene, Ray& ray) :
-	_root{ new Node{ ray } }, _scene{ scene } {
-	std::random_device rd; //Used as seed for generator, random device is a non-deterministic number generator
-
-	_generator = std::mt19937(rd()); //Standard mersenne_twister_engine seeded with rd()
-	//Create uniform distribution between (0,1)
-	_theta_distribution = std::uniform_real_distribution<>{ 0.0, 1.0 };
-	_rho_distribution = std::uniform_real_distribution<>{ 0.0, 1.0 };
-}
+	_root{ new Node{ ray } }, _scene{ scene } {}
 
 void RayTree::createRayTree()
 {
@@ -210,8 +203,8 @@ glm::dvec3 RayTree::shootShadowRay(Node* ptr) {
 		glm::dvec3 irradiance{ 0.0 };
 		size_t const NUMBER_SHADOW_RAYS{ settings::NUMBER_OF_SHADOW_RAYS };
 		for (size_t i{ 0 }; i < NUMBER_SHADOW_RAYS; i++) {
-			double c1{ _rho_distribution(_generator) * sideLength };
-			double c2{ _rho_distribution(_generator) * sideLength };
+			double c1{ utils::threadSafeRandom(0.0, 1.0) * sideLength};
+			double c2{ utils::threadSafeRandom(0.0, 1.0) * sideLength };
 			glm::dvec3 pointOnLightsrc{ std::move(lightsource.getRandomPointOnSurface(c1,c2)) };
 
 			glm::dvec3 shadowDirection{ pointOnLightsrc - startPosition };
@@ -386,8 +379,8 @@ so that phi_i = 2PIx_i and theta_i = PIy_i/2
 //Based on lecture 6 - slide 21/22, lecture 9 - slide 14-18, lecture 10 - slide 22
 RayTree::Node* RayTree::computeDiffiuseReflection(Ray const& inRay) {
 	//Get the random azimuth and inclination angle for the random out direction
-	double x{ _rho_distribution(_generator) };
-	double y{ _theta_distribution(_generator) };
+	double x{ utils::threadSafeRandom(0.0, 1.0) };
+	double y{ utils::threadSafeRandom(0.0, 1.0) };
 	assert(x > 0.0 && x < 1.0);
 	assert(y > 0.0 && y < 1.0);
 	//rho

@@ -24,10 +24,11 @@ double const DELTA_HEIGHT{ settings::DELTA_HEIGHT };
 
 class Camera {
 public:
-	Camera(bool useeye1 = true, int ss = 0);
+	Camera(glm::dvec3 const& pos, glm::dvec3 const& front, glm::dvec3 const& up);
 	void render(Scene const& scene);
 	void writeToFile(std::string const& filename);
 
+	glm::dmat4 cameraToWorld() const;
 private:
 	struct Pixel {
 		Pixel(/*std::vector<Ray> const& _rays*/) /*: rays{ _rays }*/ {}
@@ -41,17 +42,14 @@ private:
 
 	//Camera plane defined as Row<Column>
 	std::vector<std::vector<Pixel>> cameraplane;
-	glm::dvec3 eyePos1{ -2.0, 0.0, 0.0 };
-	glm::dvec3 eyePos2{ -1.0, 0.0, 0.0 };
-	bool _useEye1;
 
 	int const _supersampling;
 	std::mutex _renderPixelLock;
 	int _renderedPixels{ 0 };
 	int _pixelSinceLastUpdate{ 0 };
 	double _totalAverageTimePerPixel{ 0.0 };
+	glm::dmat4 _viewMatrix;
 
-	std::mt19937 _gen; //Standard mersenne_twister_engine seeded with rd()
 	std::chrono::steady_clock::time_point _lastTimeCheck;
 };
 #endif // !CAMERA_H_

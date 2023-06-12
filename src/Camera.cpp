@@ -1,18 +1,58 @@
 #include "Camera.h"
 
-Camera::Camera(bool useEye1, int ss) : 
-	cameraplane{ CAMERA_PLANE_HEIGHT, std::vector<Pixel>{ CAMERA_PLANE_WIDTH } }, _supersampling{ ss }, _useEye1{ useEye1 }
-{
-	std::random_device rd; //Used as seed for generator, random device is a non-deterministic number generator
-	_gen = std::mt19937(rd()); //Standard mersenne_twister_engine seeded with rd()
+Camera::Camera(glm::dvec3 const& pos, glm::dvec3 const& front, glm::dvec3 const& up) : 
+	cameraplane{ CAMERA_PLANE_HEIGHT, std::vector<Pixel>{ CAMERA_PLANE_WIDTH } }, _supersampling{ settings::SUPERSAMPLING } {
+	//Look at creates a world to camera matrix, so we inverse it to get a camera to world
+	_viewMatrix = glm::inverse(glm::lookAt(pos, pos + front, up)); 
 }
 
 std::vector<Ray> Camera::createPixelRays(size_t row, size_t column) { //This should rather be const, but it generates error C3848 for _gen
-	double const y{ row * DELTA_HEIGHT - (1.0 - DELTA_HEIGHT / 2.0) };
-	double const z{ column * DELTA_HEIGHT - (1.0 - DELTA_WIDTH / 2.0) };
+	//Src: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-generating-camera-rays/generating-camera-rays.html
+	//This is the idea used in the for loop below, computing y and z
+	/*
+	//Raster space [0,PLANE_WIDTH/HEIGHT)
+	double pixelY = row + 0.5; //Get the center of the pixel
+	double pixelZ = row + 0.5;
+	//NDC space (0,1)
+	double ndcY = pixelY / CAMERA_PLANE_WIDTH;
+	double ndcZ = pixelZ / CAMERA_PLANE_HEIGHT;
+	//screen space [-1,1]
+	double pixelScreenY = 2.0 * ndcY - 1.0; //We change here to get positive values above the z axis and negative below. 
+	double pixelScreenZ = 1.0 - 2.0 * ndcZ;
+	//Multiply with aspect ratio to get square pixels.
+	double aspect{ static_cast<double>(CAMERA_PLANE_WIDTH) / static_cast<double>(CAMERA_PLANE_HEIGHT) };
+	pixelScreenY *= aspect;
+	*/
 
-	std::vector<Ray> rays;
+	std::vector<Ray> rays{};
 	glm::dvec3 importance{ glm::dvec3{1.0, 1.0, 1.0} };
+
+	//Generate SxS subpixels with random y,z within this pixel. 
+	for (int i{ 0 }; i < _supersampling * _supersampling; i++) {
+		double ry{ utils::threadSafeRandom(0.0, 1.0) };
+		double rz{ utils::threadSafeRandom(0.0, 1.0) };
+		double y = 2.0 * (column + ry) / CAMERA_PLANE_WIDTH - 1.0;
+		y *= settings::ASPECT_RATIO;
+		double z = 1.0 - 2.0 * (row + rz) / CAMERA_PLANE_HEIGHT;
+
+		glm::dvec3 rayStartPoint{ 0.0, 0.0, 0.0 }; //Defined in local coords
+		glm::dvec3 rayEndpoint{ 1.0, z, y }; //Defined in local coords
+		glm::dvec3 rayStartWorld = _viewMatrix * glm::dvec4{rayStartPoint, 1.0};
+		glm::dvec3 rayEndWorld = _viewMatrix * glm::dvec4{rayEndpoint, 1.0};
+		glm::dvec3 rayDir{ rayEndWorld - rayStartWorld };
+		Ray ray{ rayStartWorld, rayDir, importance };
+		rays.push_back(ray);
+	}
+	return rays;
+
+	//This solution creates a uniform grid where we pick a random location within each subpixel
+	/*
+	* OBS: random number generator is not thread safe.
+	double const z{ 1.0 - row * DELTA_HEIGHT - (DELTA_HEIGHT / 2.0) };
+	double const y{ column * DELTA_WIDTH - (1.0 - DELTA_WIDTH / 2.0) };
+
+	//std::vector<Ray> rays;
+	//glm::dvec3 importance{ glm::dvec3{1.0, 1.0, 1.0} };
 
 	//This is a fallback if we don't want super sampling to get atleast one ray per pixel.
 	if (_supersampling < 2) {
@@ -31,13 +71,13 @@ std::vector<Ray> Camera::createPixelRays(size_t row, size_t column) { //This sho
 				if (c == 0)
 					continue;
 				//Center of subpixel
-				double y_ss = y + r * DELTA_HEIGHT / (2.0 * _supersampling);
-				double z_ss = z + c * DELTA_WIDTH / (2.0 * _supersampling);
+				double y_ss = y + r * DELTA_WIDTH / (2.0 * _supersampling);
+				double z_ss = z + c * DELTA_HEIGHT / (2.0 * _supersampling);
 				//Get min and max of subpixel
-				double ymin = y_ss - DELTA_HEIGHT / (2.0 + _supersampling);
-				double ymax = y_ss + DELTA_HEIGHT / (2.0 + _supersampling);
-				double zmin = z_ss - DELTA_WIDTH / (2.0 + _supersampling);
-				double zmax = z_ss + DELTA_WIDTH / (2.0 + _supersampling);
+				double ymin = y_ss - DELTA_WIDTH / (2.0 + _supersampling);
+				double ymax = y_ss + DELTA_WIDTH / (2.0 + _supersampling);
+				double zmin = z_ss - DELTA_HEIGHT / (2.0 + _supersampling);
+				double zmax = z_ss + DELTA_HEIGHT / (2.0 + _supersampling);
 				//Create distribution to draw random number from in the range [min, max)
 				std::uniform_real_distribution<> disY{ ymin, ymax };
 				std::uniform_real_distribution<> disZ{ zmin, zmax };
@@ -45,7 +85,7 @@ std::vector<Ray> Camera::createPixelRays(size_t row, size_t column) { //This sho
 				double rY = disY(_gen);
 				double rZ = disZ(_gen);
 
-				glm::dvec3 rayStartPoint{ _useEye1 ? eyePos1 : eyePos2 };
+				glm::dvec3 rayStartPoint{ -1.0, 0.0, 0.0 };
 				glm::dvec3 rayEndpoint{ 0.0, rY, rZ };
 				glm::dvec3 rayDir{ rayEndpoint - rayStartPoint };
 				Ray ray{ rayStartPoint, rayDir, importance };
@@ -54,6 +94,7 @@ std::vector<Ray> Camera::createPixelRays(size_t row, size_t column) { //This sho
 		}
 	}
 	return rays;
+	*/
 }
 
 void Camera::updateTimeEstimate(std::chrono::steady_clock::time_point const& begin) {
@@ -146,6 +187,9 @@ void Camera::render(Scene const& scene)
 	}
 }
 
+glm::dmat4 Camera::cameraToWorld() const {
+	return _viewMatrix;
+}
 
 void Camera::writeToFile(std::string const& filename) {
 	EasyBMP::Image image(CAMERA_PLANE_WIDTH, CAMERA_PLANE_HEIGHT, filename, EasyBMP::RGBColor(255, 105, 180));
@@ -186,7 +230,7 @@ void Camera::writeToFile(std::string const& filename) {
 			color.g /= maxValue;
 			color.b /= maxValue;
 
-			image.SetPixel((CAMERA_PLANE_HEIGHT - 1) - row, (CAMERA_PLANE_WIDTH - 1) - column, EasyBMP::RGBColor(
+			image.SetPixel(column, row, EasyBMP::RGBColor(
 				color.r * 255,
 				color.g * 255,
 				color.b * 255),
@@ -200,10 +244,10 @@ void Camera::writeToFile(std::string const& filename) {
 	//	for (size_t column{ 0 }; column < CAMERA_PLANE_WIDTH; ++column) {
 	//		glm::dvec3 color = cameraplane[row][column].color;
 
-	//		image.SetPixel(row, (CAMERA_PLANE_HEIGHT - 1) - column, EasyBMP::RGBColor(
-	//			row / static_cast<float>(CAMERA_PLANE_HEIGHT) * 255 * column / static_cast<float>(CAMERA_PLANE_WIDTH),
-	//			row / static_cast<float>(CAMERA_PLANE_HEIGHT) * 255 * column / static_cast<float>(CAMERA_PLANE_WIDTH),
-	//			row / static_cast<float>(CAMERA_PLANE_HEIGHT) * 255 * column / static_cast<float>(CAMERA_PLANE_WIDTH)),
+	//		image.SetPixel(/*(CAMERA_PLANE_WIDTH - 1) - */column, /*CAMERA_PLANE_HEIGHT - 1 -*/ row, EasyBMP::RGBColor(
+	//			row / static_cast<float>(CAMERA_PLANE_HEIGHT) * 255  /*column / static_cast<float>(CAMERA_PLANE_WIDTH)*/,
+	//			row / static_cast<float>(CAMERA_PLANE_HEIGHT) * 255  /*column / static_cast<float>(CAMERA_PLANE_WIDTH)*/,
+	//			row / static_cast<float>(CAMERA_PLANE_HEIGHT) * 255  /*column / static_cast<float>(CAMERA_PLANE_WIDTH)*/),
 	//			false
 	//		);
 	//	}

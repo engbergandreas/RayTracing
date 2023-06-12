@@ -48,9 +48,5 @@ private:
 
 	Node* _root;
 	Scene const& _scene;
-
-	std::uniform_real_distribution<> _theta_distribution;
-	std::uniform_real_distribution<> _rho_distribution;
-	std::mt19937 _generator;
 };
 #endif // !RAYTREE_H_

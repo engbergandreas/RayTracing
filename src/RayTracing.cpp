@@ -15,7 +15,10 @@ int main()
 	Scene scene{};
 	std::string filename{ settings::FILENAME };
 
-	Camera camera{ false, settings::SUPERSAMPLING };
+	glm::dvec3 cameraPos{ -1.1, 0.0, 0.0 };
+	glm::dvec3 cameraFront{ 0.0, 1.0, 0.0 };
+	glm::dvec3 cameraUp{ 0.0, 0.0, 1.0 };
+	Camera camera{ cameraPos, cameraFront, cameraUp };
 
 	auto start = std::chrono::high_resolution_clock::now();
 	camera.render(scene);
