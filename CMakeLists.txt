@@ -42,6 +42,5 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT R
 
 # Link the executable with the GLM library
 target_link_libraries(${PROJECT_NAME} glm glfw)
-#These should probably be include with an extension loader lib
 find_package(OpenGL REQUIRED)
 target_link_libraries(${PROJECT_NAME} OpenGL::GL)
